@@ -1,6 +1,6 @@
 # Changelog
 
-## UNRELEASED
+## 0.1.0 - 2025-12-29
 
 - Add `mix easy_publish.release` task with full release automation
 - Support version bumping: `major`, `minor`, `patch`, `current`, or explicit version
