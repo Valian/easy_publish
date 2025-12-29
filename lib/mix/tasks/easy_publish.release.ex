@@ -140,325 +140,153 @@ defmodule Mix.Tasks.EasyPublish.Release do
 
       {:error, reason} ->
         Mix.shell().error(reason)
-        Mix.shell().info("")
-        Mix.shell().info("Usage: mix easy_publish.release VERSION [options]")
-        Mix.shell().info("")
-        Mix.shell().info("VERSION can be:")
-        Mix.shell().info("  major   - Bump major version (1.2.3 -> 2.0.0)")
-        Mix.shell().info("  minor   - Bump minor version (1.2.3 -> 1.3.0)")
-        Mix.shell().info("  patch   - Bump patch version (1.2.3 -> 1.2.4)")
-        Mix.shell().info("  current - Release current version as-is (for initial release)")
-        Mix.shell().info("  X.Y.Z   - Explicit version (e.g., 2.0.0)")
+        print_usage()
         exit({:shutdown, 1})
     end
+  end
+
+  defp print_usage do
+    Mix.shell().info("""
+
+    Usage: mix easy_publish.release VERSION [options]
+
+    VERSION can be:
+      major   - Bump major version (1.2.3 -> 2.0.0)
+      minor   - Bump minor version (1.2.3 -> 1.3.0)
+      patch   - Bump patch version (1.2.3 -> 1.2.4)
+      current - Release current version as-is (for initial release)
+      X.Y.Z   - Explicit version (e.g., 2.0.0)
+    """)
   end
 
   defp do_release(config, current_version, new_version) do
-    Mix.shell().info([:cyan, "EasyPublish Release", :reset])
-    Mix.shell().info([:cyan, "===================", :reset])
-    Mix.shell().info("")
+    print_header(current_version, new_version)
 
-    Mix.shell().info([
-      "Version: ",
-      :yellow,
-      current_version,
-      :reset,
-      " → ",
-      :green,
-      new_version,
-      :reset
-    ])
+    config = maybe_add_changelog_entry(config)
 
-    Mix.shell().info("")
-
-    # Handle --changelog-entry: add entry and skip changelog check
-    config =
-      if config.changelog_entry do
-        case add_changelog_entry(config) do
-          :ok ->
-            Mix.shell().info([:green, "✓ ", :reset, "Added changelog entry"])
-            Mix.shell().info("")
-            Map.put(config, :skip_changelog, true)
-
-          {:error, reason} ->
-            Mix.shell().error("Failed to add changelog entry: #{reason}")
-            exit({:shutdown, 1})
-        end
-      else
-        config
-      end
-
-    cond do
-      config.dry_run ->
-        Mix.shell().info([
-          :yellow,
-          "DRY RUN - only running checks, no files will be modified",
-          :reset
-        ])
-
-        Mix.shell().info("")
-
-      current_version == new_version ->
-        # "current" was used - no version updates needed
-        Mix.shell().info([:yellow, "Releasing current version (no file updates needed)", :reset])
-        Mix.shell().info("")
-
-      true ->
-        # Phase 1: Update version in files
-        Mix.shell().info([:cyan, "Phase 1: Version Updates", :reset])
-        Mix.shell().info("")
-
-        case update_version_files(new_version, current_version) do
-          :ok ->
-            Mix.shell().info("")
-
-          {:error, reason} ->
-            Mix.shell().error("Failed to update version files: #{reason}")
-            exit({:shutdown, 1})
-        end
-    end
-
-    # Phase 1: Checks (now Phase 2)
-    phase_num = if config.dry_run, do: "1", else: "2"
-    Mix.shell().info([:cyan, "Phase #{phase_num}: Pre-release Checks", :reset])
-    Mix.shell().info("")
-
-    checks = [
-      {:git_clean, "Git working directory is clean", &check_git_clean/1, config.skip_git},
-      {:git_branch, "On #{config.branch} branch", &check_git_branch/1, config.skip_git},
-      {:git_up_to_date, "Git is up to date with remote", &check_git_up_to_date/1,
-       config.skip_git},
-      {:tests, "Tests pass", &check_tests/1, config.skip_tests},
-      {:format, "Code is formatted", &check_format/1, config.skip_format},
-      {:credo, "Credo analysis passes", &check_credo/1, config.skip_credo},
-      {:dialyzer, "Dialyzer passes", &check_dialyzer/1, config.skip_dialyzer},
-      {:changelog, "Changelog has UNRELEASED section", &check_changelog_unreleased/1,
-       config.skip_changelog},
-      {:hex_dry_run, "Hex package builds successfully", &check_hex_dry_run/1,
-       config.skip_hex_dry_run}
-    ]
-
-    results =
-      Enum.map(checks, fn {name, description, check_fn, skip} ->
-        run_check(name, description, check_fn, config, skip)
-      end)
-
-    failed = Enum.filter(results, fn {_, status, _} -> status == :failed end)
-    skipped = Enum.filter(results, fn {_, status, _} -> status == :skipped end)
-    passed = Enum.filter(results, fn {_, status, _} -> status == :passed end)
-
-    Mix.shell().info("")
-
-    Mix.shell().info([
-      :green,
-      "Passed: #{length(passed)}",
-      :reset,
-      "  ",
-      :yellow,
-      "Skipped: #{length(skipped)}",
-      :reset,
-      "  ",
-      :red,
-      "Failed: #{length(failed)}",
-      :reset
-    ])
-
-    Mix.shell().info("")
-
-    if length(failed) > 0 do
-      Mix.shell().error("Pre-release checks failed. Fix the issues above before releasing.")
-      exit({:shutdown, 1})
-    end
-
-    # Phase 3: Release (unless --dry-run)
     if config.dry_run do
-      Mix.shell().info([:green, "All checks passed!", :reset])
-      Mix.shell().info("Run without --dry-run to perform the release.")
+      info([:yellow, "DRY RUN - only running checks, no files will be modified"])
+      info("")
+      run_checks_and_report(config)
+      info([:green, "All checks passed!"])
+      info("Run without --dry-run to perform the release.")
     else
-      Mix.shell().info([:cyan, "Phase 3: Release", :reset])
-      Mix.shell().info("")
-
-      release_steps(config, new_version)
+      maybe_update_version_files(current_version, new_version)
+      run_checks_and_report(config)
+      run_release_steps(config, new_version)
     end
   end
 
-  defp release_steps(config, version) do
-    # Build steps dynamically based on config
-    base_steps = [
-      {"Updating changelog", &update_changelog/2},
-      {"Committing release v#{version}", &commit_release/2},
-      {"Creating git tag v#{version}", &create_tag/2},
-      {"Pushing to remote", &push_to_remote/2}
-    ]
+  defp print_header(current_version, new_version) do
+    info([:cyan, "EasyPublish Release"])
+    info([:cyan, "==================="])
+    info("")
+    info(["Version: ", :yellow, current_version, :reset, " → ", :green, new_version])
+    info("")
+  end
 
-    github_step =
-      if config.skip_github_release do
-        []
-      else
-        [{"Creating GitHub release", &create_github_release/2}]
-      end
+  defp maybe_add_changelog_entry(config) do
+    case config.changelog_entry do
+      nil ->
+        config
 
-    hex_step = [{"Publishing to Hex", &publish_to_hex/2}]
+      entry ->
+        case add_changelog_entry(config.changelog_file, entry) do
+          :ok ->
+            info([:green, "✓ ", :reset, "Added changelog entry"])
+            info("")
+            %{config | skip_changelog: true}
 
-    steps = base_steps ++ github_step ++ hex_step
+          {:error, reason} ->
+            error("Failed to add changelog entry: #{reason}")
+            exit({:shutdown, 1})
+        end
+    end
+  end
 
-    Enum.reduce_while(steps, :ok, fn {description, step_fn}, _acc ->
-      Mix.shell().info([:cyan, "→ ", :reset, description, "..."])
+  defp maybe_update_version_files(current, new) when current == new do
+    info([:yellow, "Releasing current version (no file updates needed)"])
+    info("")
+  end
 
-      case step_fn.(config, version) do
-        :ok ->
-          Mix.shell().info([:green, "  ✓ Done", :reset])
-          {:cont, :ok}
+  defp maybe_update_version_files(current, new) do
+    info([:cyan, "Updating Version Files"])
+    info("")
 
-        :skip ->
-          Mix.shell().info([:yellow, "  ○ Skipped", :reset])
-          {:cont, :ok}
-
-        {:error, reason} ->
-          Mix.shell().error("  ✗ Failed: #{reason}")
-          {:halt, {:error, reason}}
-      end
-    end)
-    |> case do
-      :ok ->
-        Mix.shell().info("")
-        Mix.shell().info([:green, "Successfully released v#{version}!", :reset])
-
-      {:error, _} ->
-        Mix.shell().info("")
-        Mix.shell().error("Release failed!")
+    with :ok <- update_mix_exs(new, current),
+         :ok <- update_readme(new, current) do
+      info("")
+    else
+      {:error, reason} ->
+        error("Failed to update version files: #{reason}")
         exit({:shutdown, 1})
     end
   end
 
-  defp build_config(opts) do
-    app_config =
-      Enum.reduce(@default_config, %{}, fn {key, default}, acc ->
-        value = Application.get_env(:easy_publish, key, default)
-        Map.put(acc, key, value)
-      end)
+  defp run_checks_and_report(config) do
+    info([:cyan, "Pre-release Checks"])
+    info("")
 
-    Enum.reduce(opts, app_config, fn {key, value}, acc ->
-      Map.put(acc, key, value)
+    results = run_all_checks(config)
+
+    passed = Enum.count(results, &(&1 == :passed))
+    skipped = Enum.count(results, &(&1 == :skipped))
+    failed = Enum.count(results, &(&1 == :failed))
+
+    info("")
+    info([
+      :green, "Passed: #{passed}", :reset, "  ",
+      :yellow, "Skipped: #{skipped}", :reset, "  ",
+      :red, "Failed: #{failed}"
+    ])
+    info("")
+
+    if failed > 0 do
+      error("Pre-release checks failed. Fix the issues above before releasing.")
+      exit({:shutdown, 1})
+    end
+  end
+
+  defp run_all_checks(config) do
+    checks = [
+      {"Git working directory is clean", &check_git_clean/0, config.skip_git},
+      {"On #{config.branch} branch", fn -> check_git_branch(config.branch) end, config.skip_git},
+      {"Git is up to date with remote", &check_git_up_to_date/0, config.skip_git},
+      {"Tests pass", &check_tests/0, config.skip_tests},
+      {"Code is formatted", &check_format/0, config.skip_format},
+      {"Credo analysis passes", &check_credo/0, config.skip_credo},
+      {"Dialyzer passes", &check_dialyzer/0, config.skip_dialyzer},
+      {"Changelog has UNRELEASED section", fn -> check_changelog(config.changelog_file) end, config.skip_changelog},
+      {"Hex package builds successfully", &check_hex_build/0, config.skip_hex_dry_run}
+    ]
+
+    Enum.map(checks, fn {desc, check_fn, skip} ->
+      run_check(desc, check_fn, skip)
     end)
   end
 
-  # Version parsing and calculation
-
-  defp parse_version_arg([], _current) do
-    {:error, "VERSION argument is required"}
+  defp run_check(description, _check_fn, true) do
+    print_check(description, :skipped)
+    :skipped
   end
 
-  defp parse_version_arg([version_arg | _], current_version) do
-    EasyPublish.Version.parse_arg(version_arg, current_version)
-  end
+  defp run_check(description, check_fn, false) do
+    case check_fn.() do
+      :ok ->
+        print_check(description, :passed)
+        :passed
 
-  # Version file updates
+      :skip ->
+        print_check(description, :skipped, "not available")
+        :skipped
 
-  defp update_version_files(new_version, current_version) do
-    with :ok <- update_mix_exs(new_version, current_version),
-         :ok <- update_readme(new_version, current_version) do
-      :ok
+      {:error, reason} ->
+        print_check(description, :failed, reason)
+        :failed
     end
   end
 
-  defp update_mix_exs(new_version, current_version) do
-    path = "mix.exs"
-
-    if File.exists?(path) do
-      content = File.read!(path)
-
-      # Match @version "X.Y.Z" pattern
-      updated =
-        Regex.replace(
-          ~r/@version\s+"#{Regex.escape(current_version)}"/,
-          content,
-          "@version \"#{new_version}\""
-        )
-
-      if updated == content do
-        {:error, "could not find @version \"#{current_version}\" in mix.exs"}
-      else
-        File.write!(path, updated)
-        Mix.shell().info([:green, "✓ ", :reset, "Updated mix.exs"])
-        :ok
-      end
-    else
-      {:error, "mix.exs not found"}
-    end
-  end
-
-  defp update_readme(new_version, current_version) do
-    path = "README.md"
-
-    if File.exists?(path) do
-      content = File.read!(path)
-
-      # Extract major.minor for ~> format
-      {new_major, new_minor} = extract_major_minor(new_version)
-      {cur_major, cur_minor} = extract_major_minor(current_version)
-
-      # Match {:package_name, "~> X.Y"} pattern
-      # Use flexible pattern that matches any package name
-      updated =
-        Regex.replace(
-          ~r/(\{:\w+,\s*"~>\s*)#{cur_major}\.#{cur_minor}(")/,
-          content,
-          "\\g{1}#{new_major}.#{new_minor}\\g{2}"
-        )
-
-      if updated == content do
-        # Not an error - README might not have dependency version
-        Mix.shell().info([
-          :yellow,
-          "○ ",
-          :reset,
-          "README.md - no dependency version found (skipped)"
-        ])
-
-        :ok
-      else
-        File.write!(path, updated)
-        Mix.shell().info([:green, "✓ ", :reset, "Updated README.md"])
-        :ok
-      end
-    else
-      # README is optional
-      Mix.shell().info([:yellow, "○ ", :reset, "README.md not found (skipped)"])
-      :ok
-    end
-  end
-
-  defp extract_major_minor(version) do
-    EasyPublish.Version.extract_major_minor(version)
-  end
-
-  defp run_check(name, description, check_fn, config, skip) do
-    if skip do
-      print_status(description, :skipped)
-      {name, :skipped, nil}
-    else
-      case check_fn.(config) do
-        :ok ->
-          print_status(description, :passed)
-          {name, :passed, nil}
-
-        {:ok, _} ->
-          print_status(description, :passed)
-          {name, :passed, nil}
-
-        :skip ->
-          print_status(description, :skipped, "not available")
-          {name, :skipped, nil}
-
-        {:error, reason} ->
-          print_status(description, :failed, reason)
-          {name, :failed, reason}
-      end
-    end
-  end
-
-  defp print_status(description, status, detail \\ nil) do
+  defp print_check(description, status, detail \\ nil) do
     {symbol, color} =
       case status do
         :passed -> {"✓", :green}
@@ -466,13 +294,131 @@ defmodule Mix.Tasks.EasyPublish.Release do
         :skipped -> {"○", :yellow}
       end
 
-    detail_str = if detail, do: " (#{detail})", else: ""
-    Mix.shell().info([color, "#{symbol} #{description}#{detail_str}", :reset])
+    suffix = if detail, do: " (#{detail})", else: ""
+    info([color, "#{symbol} #{description}#{suffix}"])
   end
 
-  # Git checks
+  defp run_release_steps(config, version) do
+    info([:cyan, "Release"])
+    info("")
 
-  defp check_git_clean(_config) do
+    steps = [
+      {"Updating changelog", fn -> update_changelog(config.changelog_file, version) end},
+      {"Committing release v#{version}", fn -> commit_release(config.changelog_file, version) end},
+      {"Creating git tag v#{version}", fn -> create_tag(version) end},
+      {"Pushing to remote", fn -> push_to_remote(version) end},
+      {"Creating GitHub release", fn -> create_github_release(version) end, config.skip_github_release},
+      {"Publishing to Hex", &publish_to_hex/0}
+    ]
+
+    Enum.reduce_while(steps, :ok, fn step, _acc ->
+      {desc, step_fn, skip} = normalize_step(step)
+
+      if skip do
+        {:cont, :ok}
+      else
+        info([:cyan, "→ ", :reset, desc, "..."])
+
+        case step_fn.() do
+          :ok ->
+            info([:green, "  ✓ Done"])
+            {:cont, :ok}
+
+          :skip ->
+            info([:yellow, "  ○ Skipped"])
+            {:cont, :ok}
+
+          {:error, reason} ->
+            error("  ✗ Failed: #{reason}")
+            {:halt, :failed}
+        end
+      end
+    end)
+    |> case do
+      :ok ->
+        info("")
+        info([:green, "Successfully released v#{version}!"])
+
+      :failed ->
+        info("")
+        error("Release failed!")
+        exit({:shutdown, 1})
+    end
+  end
+
+  defp normalize_step({desc, fn_, skip}), do: {desc, fn_, skip}
+  defp normalize_step({desc, fn_}), do: {desc, fn_, false}
+
+  # Config
+
+  defp build_config(opts) do
+    @default_config
+    |> Enum.reduce(%{}, fn {key, default}, acc ->
+      Map.put(acc, key, Application.get_env(:easy_publish, key, default))
+    end)
+    |> Map.merge(Map.new(opts))
+  end
+
+  defp parse_version_arg([], _current), do: {:error, "VERSION argument is required"}
+  defp parse_version_arg([arg | _], current), do: EasyPublish.Version.parse_arg(arg, current)
+
+  # Version file updates
+
+  defp update_mix_exs(new_version, current_version) do
+    path = "mix.exs"
+
+    with {:ok, content} <- File.read(path),
+         updated = Regex.replace(
+           ~r/@version\s+"#{Regex.escape(current_version)}"/,
+           content,
+           "@version \"#{new_version}\""
+         ),
+         true <- updated != content,
+         :ok <- File.write(path, updated) do
+      info([:green, "✓ ", :reset, "Updated mix.exs"])
+      :ok
+    else
+      {:error, reason} -> {:error, "mix.exs: #{inspect(reason)}"}
+      false -> {:error, "could not find @version \"#{current_version}\" in mix.exs"}
+    end
+  end
+
+  defp update_readme(new_version, current_version) do
+    path = "README.md"
+
+    case File.read(path) do
+      {:ok, content} ->
+        {new_major, new_minor} = EasyPublish.Version.extract_major_minor(new_version)
+        {cur_major, cur_minor} = EasyPublish.Version.extract_major_minor(current_version)
+
+        updated =
+          Regex.replace(
+            ~r/(\{:\w+,\s*"~>\s*)#{cur_major}\.#{cur_minor}(")/,
+            content,
+            "\\g{1}#{new_major}.#{new_minor}\\g{2}"
+          )
+
+        if updated == content do
+          info([:yellow, "○ ", :reset, "README.md - no dependency version found (skipped)"])
+        else
+          File.write!(path, updated)
+          info([:green, "✓ ", :reset, "Updated README.md"])
+        end
+
+        :ok
+
+      {:error, :enoent} ->
+        info([:yellow, "○ ", :reset, "README.md not found (skipped)"])
+        :ok
+
+      {:error, reason} ->
+        {:error, "README.md: #{inspect(reason)}"}
+    end
+  end
+
+  # Checks
+
+  defp check_git_clean do
     case System.cmd("git", ["status", "--porcelain"], stderr_to_stdout: true) do
       {"", 0} -> :ok
       {output, 0} -> {:error, "uncommitted changes:\n#{String.trim(output)}"}
@@ -480,60 +426,46 @@ defmodule Mix.Tasks.EasyPublish.Release do
     end
   end
 
-  defp check_git_branch(config) do
+  defp check_git_branch(expected) do
     case System.cmd("git", ["branch", "--show-current"], stderr_to_stdout: true) do
       {branch, 0} ->
         branch = String.trim(branch)
-
-        if branch == config.branch do
-          :ok
-        else
-          {:error, "on branch '#{branch}', expected '#{config.branch}'"}
-        end
+        if branch == expected, do: :ok, else: {:error, "on '#{branch}', expected '#{expected}'"}
 
       {error, _} ->
         {:error, "git error: #{String.trim(error)}"}
     end
   end
 
-  defp check_git_up_to_date(_config) do
+  defp check_git_up_to_date do
     with {_, 0} <- System.cmd("git", ["fetch"], stderr_to_stdout: true),
          {status, 0} <- System.cmd("git", ["status", "-uno"], stderr_to_stdout: true) do
       cond do
-        String.contains?(status, "Your branch is behind") ->
-          {:error, "branch is behind remote"}
-
-        String.contains?(status, "Your branch is ahead") ->
-          {:error, "branch is ahead of remote (unpushed commits)"}
-
-        String.contains?(status, "have diverged") ->
-          {:error, "branch has diverged from remote"}
-
-        true ->
-          :ok
+        String.contains?(status, "Your branch is behind") -> {:error, "branch is behind remote"}
+        String.contains?(status, "Your branch is ahead") -> {:error, "unpushed commits"}
+        String.contains?(status, "have diverged") -> {:error, "branch has diverged from remote"}
+        true -> :ok
       end
     else
       {error, _} -> {:error, "git error: #{String.trim(error)}"}
     end
   end
 
-  # Code quality checks
-
-  defp check_tests(_config) do
+  defp check_tests do
     case System.cmd("mix", ["test"], stderr_to_stdout: true, env: [{"MIX_ENV", "test"}]) do
       {_, 0} -> :ok
       {output, _} -> {:error, "tests failed\n#{last_lines(output, 5)}"}
     end
   end
 
-  defp check_format(_config) do
+  defp check_format do
     case System.cmd("mix", ["format", "--check-formatted"], stderr_to_stdout: true) do
       {_, 0} -> :ok
       {_, _} -> {:error, "code is not formatted, run: mix format"}
     end
   end
 
-  defp check_credo(_config) do
+  defp check_credo do
     if has_dep?(:credo) do
       case System.cmd("mix", ["credo", "--strict"], stderr_to_stdout: true) do
         {_, 0} -> :ok
@@ -544,7 +476,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
     end
   end
 
-  defp check_dialyzer(_config) do
+  defp check_dialyzer do
     if has_dep?(:dialyxir) do
       case System.cmd("mix", ["dialyzer"], stderr_to_stdout: true) do
         {_, 0} -> :ok
@@ -555,131 +487,81 @@ defmodule Mix.Tasks.EasyPublish.Release do
     end
   end
 
-  # Changelog check - looks for UNRELEASED section
+  defp check_changelog(path) do
+    case File.read(path) do
+      {:ok, content} ->
+        if has_unreleased?(content),
+          do: :ok,
+          else: {:error, "no UNRELEASED section found"}
 
-  defp check_changelog_unreleased(config) do
-    changelog_file = config.changelog_file
+      {:error, :enoent} ->
+        {:error, "#{path} not found"}
 
-    if File.exists?(changelog_file) do
-      content = File.read!(changelog_file)
-
-      if has_unreleased_section?(content) do
-        :ok
-      else
-        {:error, "no UNRELEASED section found in #{changelog_file}"}
-      end
-    else
-      {:error, "#{changelog_file} not found"}
+      {:error, reason} ->
+        {:error, inspect(reason)}
     end
   end
 
-  defp has_unreleased_section?(content) do
-    content
-    |> String.downcase()
-    |> String.contains?("unreleased")
-  end
-
-  defp add_changelog_entry(config) do
-    changelog_file = config.changelog_file
-    entry = config.changelog_entry
-
-    try do
-      if File.exists?(changelog_file) do
-        content = File.read!(changelog_file)
-
-        if has_unreleased_section?(content) do
-          # Add entry under existing UNRELEASED section
-          updated =
-            Regex.replace(
-              ~r/(##\s*unreleased\s*\n)/i,
-              content,
-              "\\1\n- #{entry}\n"
-            )
-
-          File.write!(changelog_file, updated)
-          :ok
-        else
-          # Create UNRELEASED section with entry
-          updated =
-            Regex.replace(
-              ~r/(#[^\n]*\n+)/,
-              content,
-              "\\1## UNRELEASED\n\n- #{entry}\n\n",
-              global: false
-            )
-
-          File.write!(changelog_file, updated)
-          :ok
-        end
-      else
-        # Create changelog file with UNRELEASED section
-        content = """
-        # Changelog
-
-        ## UNRELEASED
-
-        - #{entry}
-        """
-
-        File.write!(changelog_file, content)
-        :ok
-      end
-    rescue
-      e in File.Error -> {:error, Exception.message(e)}
-    end
-  end
-
-  # Hex checks
-
-  defp check_hex_dry_run(_config) do
-    # Use hex.build instead of hex.publish --dry-run because dry-run still prompts for auth
+  defp check_hex_build do
     case System.cmd("mix", ["hex.build"], stderr_to_stdout: true) do
       {output, 0} ->
-        if String.contains?(output, "error") or String.contains?(output, "Error") do
-          {:error, "hex.build issues\n#{last_lines(output, 5)}"}
-        else
-          :ok
-        end
+        if String.contains?(output, ["error", "Error"]),
+          do: {:error, "hex.build issues\n#{last_lines(output, 5)}"},
+          else: :ok
 
       {output, _} ->
         {:error, "hex.build failed\n#{last_lines(output, 5)}"}
     end
   end
 
-  # Release steps
+  # Changelog operations
 
-  defp update_changelog(config, version) do
-    changelog_file = config.changelog_file
-    content = File.read!(changelog_file)
+  defp has_unreleased?(content), do: content |> String.downcase() |> String.contains?("unreleased")
+
+  defp add_changelog_entry(path, entry) do
+    try do
+      content = read_or_create_changelog(path)
+
+      updated =
+        if has_unreleased?(content) do
+          Regex.replace(~r/(##\s*unreleased\s*\n)/i, content, "\\1\n- #{entry}\n")
+        else
+          Regex.replace(~r/(#[^\n]*\n+)/, content, "\\1## UNRELEASED\n\n- #{entry}\n\n", global: false)
+        end
+
+      File.write!(path, updated)
+      :ok
+    rescue
+      e in File.Error -> {:error, Exception.message(e)}
+    end
+  end
+
+  defp read_or_create_changelog(path) do
+    case File.read(path) do
+      {:ok, content} -> content
+      {:error, :enoent} -> "# Changelog\n\n"
+    end
+  end
+
+  defp update_changelog(path, version) do
+    content = File.read!(path)
     date = Date.utc_today() |> Date.to_string()
-
-    # Replace UNRELEASED with version and date (case insensitive)
-    updated =
-      Regex.replace(
-        ~r/##\s*unreleased/i,
-        content,
-        "## #{version} - #{date}"
-      )
+    updated = Regex.replace(~r/##\s*unreleased/i, content, "## #{version} - #{date}")
 
     if updated == content do
       {:error, "failed to update UNRELEASED section"}
     else
-      File.write!(changelog_file, updated)
+      File.write!(path, updated)
       :ok
     end
   end
 
-  defp commit_release(config, version) do
-    changelog_file = config.changelog_file
+  # Release steps
 
-    # Add all release-related files
-    files_to_add = ["mix.exs", "README.md", changelog_file]
-
-    Enum.each(files_to_add, fn file ->
-      if File.exists?(file) do
-        System.cmd("git", ["add", file], stderr_to_stdout: true)
-      end
-    end)
+  defp commit_release(changelog_file, version) do
+    ["mix.exs", "README.md", changelog_file]
+    |> Enum.filter(&File.exists?/1)
+    |> Enum.each(&System.cmd("git", ["add", &1], stderr_to_stdout: true))
 
     case System.cmd("git", ["commit", "-m", "Release v#{version}"], stderr_to_stdout: true) do
       {_, 0} -> :ok
@@ -687,7 +569,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
     end
   end
 
-  defp create_tag(_config, version) do
+  defp create_tag(version) do
     tag = "v#{version}"
 
     case System.cmd("git", ["tag", "-a", tag, "-m", "Release #{tag}"], stderr_to_stdout: true) do
@@ -696,49 +578,42 @@ defmodule Mix.Tasks.EasyPublish.Release do
     end
   end
 
-  defp push_to_remote(_config, version) do
-    tag = "v#{version}"
-
+  defp push_to_remote(version) do
     with {_, 0} <- System.cmd("git", ["push"], stderr_to_stdout: true),
-         {_, 0} <- System.cmd("git", ["push", "origin", tag], stderr_to_stdout: true) do
+         {_, 0} <- System.cmd("git", ["push", "origin", "v#{version}"], stderr_to_stdout: true) do
       :ok
     else
       {error, _} -> {:error, String.trim(error)}
     end
   end
 
-  defp create_github_release(_config, version) do
+  defp create_github_release(version) do
     tag = "v#{version}"
 
-    # Check if gh CLI is available
-    case System.find_executable("gh") do
-      nil ->
-        Mix.shell().info("    (gh CLI not installed)")
+    cond do
+      is_nil(System.find_executable("gh")) ->
+        info("    (gh CLI not installed)")
         :skip
 
-      _gh_path ->
-        # Check if we're in a GitHub repo
-        case System.cmd("gh", ["repo", "view", "--json", "name"], stderr_to_stdout: true) do
-          {_, 0} ->
-            # Create release with auto-generated notes from changelog
-            case System.cmd(
-                   "gh",
-                   ["release", "create", tag, "--title", "Release #{tag}", "--generate-notes"],
-                   stderr_to_stdout: true
-                 ) do
-              {_, 0} -> :ok
-              {error, _} -> {:error, "gh release failed: #{String.trim(error)}"}
-            end
+      !github_repo?() ->
+        info("    (not a GitHub repository)")
+        :skip
 
-          {_, _} ->
-            Mix.shell().info("    (not a GitHub repository)")
-            :skip
+      true ->
+        case System.cmd("gh", ["release", "create", tag, "--title", "Release #{tag}", "--generate-notes"],
+               stderr_to_stdout: true
+             ) do
+          {_, 0} -> :ok
+          {error, _} -> {:error, "gh release failed: #{String.trim(error)}"}
         end
     end
   end
 
-  defp publish_to_hex(_config, _version) do
-    # Use Mix.shell().cmd which properly handles interactive stdin/stdout
+  defp github_repo? do
+    match?({_, 0}, System.cmd("gh", ["repo", "view", "--json", "name"], stderr_to_stdout: true))
+  end
+
+  defp publish_to_hex do
     case Mix.shell().cmd("mix hex.publish --yes") do
       0 -> :ok
       _ -> {:error, "hex.publish failed"}
@@ -757,9 +632,9 @@ defmodule Mix.Tasks.EasyPublish.Release do
   end
 
   defp last_lines(string, n) do
-    string
-    |> String.split("\n")
-    |> Enum.take(-n)
-    |> Enum.join("\n")
+    string |> String.split("\n") |> Enum.take(-n) |> Enum.join("\n")
   end
+
+  defp info(msg), do: Mix.shell().info(msg)
+  defp error(msg), do: Mix.shell().error(msg)
 end
