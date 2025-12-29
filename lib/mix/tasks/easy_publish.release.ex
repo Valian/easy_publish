@@ -465,9 +465,9 @@ defmodule Mix.Tasks.EasyPublish.Release do
   end
 
   defp check_tests do
-    case System.cmd("mix", ["test"], stderr_to_stdout: true, env: [{"MIX_ENV", "test"}]) do
-      {_, 0} -> :ok
-      {output, _} -> {:error, "tests failed\n#{last_lines(output, 5)}"}
+    case run_streaming("mix", ["test"], [{"MIX_ENV", "test"}]) do
+      0 -> :ok
+      _ -> {:error, "tests failed"}
     end
   end
 
@@ -480,9 +480,9 @@ defmodule Mix.Tasks.EasyPublish.Release do
 
   defp check_credo do
     if has_dep?(:credo) do
-      case System.cmd("mix", ["credo", "--strict"], stderr_to_stdout: true) do
-        {_, 0} -> :ok
-        {output, _} -> {:error, "credo issues found\n#{last_lines(output, 5)}"}
+      case run_streaming("mix", ["credo", "--strict"]) do
+        0 -> :ok
+        _ -> {:error, "credo issues found"}
       end
     else
       :skip
@@ -491,9 +491,9 @@ defmodule Mix.Tasks.EasyPublish.Release do
 
   defp check_dialyzer do
     if has_dep?(:dialyxir) do
-      case System.cmd("mix", ["dialyzer"], stderr_to_stdout: true) do
-        {_, 0} -> :ok
-        {output, _} -> {:error, "dialyzer errors\n#{last_lines(output, 5)}"}
+      case run_streaming("mix", ["dialyzer"]) do
+        0 -> :ok
+        _ -> {:error, "dialyzer errors"}
       end
     else
       :skip
@@ -516,14 +516,9 @@ defmodule Mix.Tasks.EasyPublish.Release do
   end
 
   defp check_hex_build do
-    case System.cmd("mix", ["hex.build"], stderr_to_stdout: true) do
-      {output, 0} ->
-        if String.contains?(output, ["error", "Error"]),
-          do: {:error, "hex.build issues\n#{last_lines(output, 5)}"},
-          else: :ok
-
-      {output, _} ->
-        {:error, "hex.build failed\n#{last_lines(output, 5)}"}
+    case run_streaming("mix", ["hex.build"]) do
+      0 -> :ok
+      _ -> {:error, "hex.build failed"}
     end
   end
 
@@ -649,8 +644,11 @@ defmodule Mix.Tasks.EasyPublish.Release do
     end)
   end
 
-  defp last_lines(string, n) do
-    string |> String.split("\n") |> Enum.take(-n) |> Enum.join("\n")
+  defp run_streaming(cmd, args, env \\ []) do
+    env_str = Enum.map_join(env, " ", fn {k, v} -> "#{k}=#{v}" end)
+    cmd_str = Enum.join([cmd | args], " ")
+    full_cmd = if env_str == "", do: cmd_str, else: "#{env_str} #{cmd_str}"
+    Mix.shell().cmd(full_cmd)
   end
 
   defp info(msg), do: Mix.shell().info(msg)
