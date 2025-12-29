@@ -667,29 +667,10 @@ defmodule Mix.Tasks.EasyPublish.Release do
   end
 
   defp publish_to_hex(_config, _version) do
-    # Use interactive mode for hex.publish to handle authentication prompts
-    port =
-      Port.open({:spawn_executable, System.find_executable("mix")}, [
-        :binary,
-        :exit_status,
-        :use_stdio,
-        args: ["hex.publish", "--yes"]
-      ])
-
-    collect_port_output(port, "")
-  end
-
-  defp collect_port_output(port, acc) do
-    receive do
-      {^port, {:data, data}} ->
-        IO.write(data)
-        collect_port_output(port, acc <> data)
-
-      {^port, {:exit_status, 0}} ->
-        :ok
-
-      {^port, {:exit_status, _code}} ->
-        {:error, "hex.publish failed"}
+    # Use Mix.shell().cmd which properly handles interactive stdin/stdout
+    case Mix.shell().cmd("mix hex.publish --yes") do
+      0 -> :ok
+      _ -> {:error, "hex.publish failed"}
     end
   end
 
