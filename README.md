@@ -116,6 +116,26 @@ When you run `mix easy_publish.release minor` for version 0.2.0, it becomes:
 | `--skip-hex-dry-run` | Skip hex.build validation |
 | `--skip-github-release` | Skip GitHub release creation |
 | `--branch NAME` | Required branch name (default: "main") |
+| `--changelog-entry CONTENT` | Add a changelog entry and skip UNRELEASED check |
+
+### Quick releases with `--changelog-entry`
+
+For quick releases where you don't want to manually edit the changelog first:
+
+```bash
+# Add a changelog entry and release in one command
+mix easy_publish.release patch --changelog-entry "Fixed authentication bug"
+
+# Multiple changes can be separated by newlines
+mix easy_publish.release minor --changelog-entry "Added user profiles
+Fixed memory leak
+Updated dependencies"
+```
+
+This will:
+1. Add the entry to the UNRELEASED section (creating it if needed)
+2. Skip the UNRELEASED section check
+3. Proceed with the normal release flow
 
 ## Configuration
 
@@ -125,10 +145,64 @@ Configure defaults in your `config/config.exs`:
 config :easy_publish,
   branch: "main",
   changelog_file: "CHANGELOG.md",
-  skip_github_release: false
+  skip_github_release: false,
+  skip_tests: false,
+  skip_format: false,
+  skip_credo: false,
+  skip_dialyzer: false,
+  skip_changelog: false,
+  skip_git: false,
+  skip_hex_dry_run: false
 ```
 
 CLI flags always override configuration.
+
+### Example configurations
+
+**CI-friendly config** (skip slow checks locally, run them in CI):
+
+```elixir
+# config/dev.exs
+config :easy_publish,
+  skip_dialyzer: true,
+  skip_credo: true
+```
+
+**Non-GitHub project** (skip GitHub release creation):
+
+```elixir
+config :easy_publish,
+  skip_github_release: true
+```
+
+**Custom branch workflow**:
+
+```elixir
+config :easy_publish,
+  branch: "develop"
+```
+
+### CLI examples
+
+```bash
+# Full release with all checks
+mix easy_publish.release patch
+
+# Quick release skipping slow checks
+mix easy_publish.release patch --skip-dialyzer --skip-credo
+
+# Dry run to validate everything first
+mix easy_publish.release minor --dry-run
+
+# Release from a feature branch (not recommended for production)
+mix easy_publish.release patch --branch feature/my-branch --skip-git
+
+# Initial release of a new package
+mix easy_publish.release current
+
+# Quick bugfix release
+mix easy_publish.release patch --changelog-entry "Fixed crash on startup"
+```
 
 ## GitHub Release
 
