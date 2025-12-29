@@ -3,20 +3,20 @@ defmodule Mix.Tasks.EasyPublish.ReleaseTest do
 
   describe "argument parsing" do
     test "shows error when no version argument provided" do
-      assert catch_exit(run_task([])) == {:shutdown, 1}
+      assert catch_exit(run_task_quiet([])) == {:shutdown, 1}
     end
 
     test "shows error for invalid version format" do
-      assert catch_exit(run_task(["not.valid"])) == {:shutdown, 1}
+      assert catch_exit(run_task_quiet(["not.valid"])) == {:shutdown, 1}
     end
 
     test "shows error when new version equals current" do
       current = Mix.Project.config()[:version]
-      assert catch_exit(run_task([current])) == {:shutdown, 1}
+      assert catch_exit(run_task_quiet([current])) == {:shutdown, 1}
     end
 
     test "shows error when new version is less than current" do
-      assert catch_exit(run_task(["0.0.1"])) == {:shutdown, 1}
+      assert catch_exit(run_task_quiet(["0.0.1"])) == {:shutdown, 1}
     end
   end
 
@@ -89,6 +89,22 @@ defmodule Mix.Tasks.EasyPublish.ReleaseTest do
 
   defp run_task(args) do
     Mix.Tasks.EasyPublish.Release.run(args)
+  end
+
+  defp run_task_quiet(args) do
+    Mix.shell(Mix.Shell.Process)
+    Mix.Tasks.EasyPublish.Release.run(args)
+  after
+    flush_shell_messages()
+    Mix.shell(Mix.Shell.IO)
+  end
+
+  defp flush_shell_messages do
+    receive do
+      {:mix_shell, _, _} -> flush_shell_messages()
+    after
+      0 -> :ok
+    end
   end
 
   defp run_and_capture(args) do
