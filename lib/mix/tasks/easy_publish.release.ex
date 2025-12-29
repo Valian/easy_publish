@@ -12,6 +12,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
     * `major` - Bump major version (1.2.3 -> 2.0.0)
     * `minor` - Bump minor version (1.2.3 -> 1.3.0)
     * `patch` - Bump patch version (1.2.3 -> 1.2.4)
+    * `current` - Release the current version as-is (useful for initial release)
     * Explicit version like `2.0.0`
 
   By default, performs the full release. Use `--dry-run` to only run checks.
@@ -139,10 +140,11 @@ defmodule Mix.Tasks.EasyPublish.Release do
         Mix.shell().info("Usage: mix easy_publish.release VERSION [options]")
         Mix.shell().info("")
         Mix.shell().info("VERSION can be:")
-        Mix.shell().info("  major  - Bump major version (1.2.3 -> 2.0.0)")
-        Mix.shell().info("  minor  - Bump minor version (1.2.3 -> 1.3.0)")
-        Mix.shell().info("  patch  - Bump patch version (1.2.3 -> 1.2.4)")
-        Mix.shell().info("  X.Y.Z  - Explicit version (e.g., 2.0.0)")
+        Mix.shell().info("  major   - Bump major version (1.2.3 -> 2.0.0)")
+        Mix.shell().info("  minor   - Bump minor version (1.2.3 -> 1.3.0)")
+        Mix.shell().info("  patch   - Bump patch version (1.2.3 -> 1.2.4)")
+        Mix.shell().info("  current - Release current version as-is (for initial release)")
+        Mix.shell().info("  X.Y.Z   - Explicit version (e.g., 2.0.0)")
         exit({:shutdown, 1})
     end
   end
@@ -165,27 +167,34 @@ defmodule Mix.Tasks.EasyPublish.Release do
 
     Mix.shell().info("")
 
-    if config.dry_run do
-      Mix.shell().info([
-        :yellow,
-        "DRY RUN - only running checks, no files will be modified",
-        :reset
-      ])
+    cond do
+      config.dry_run ->
+        Mix.shell().info([
+          :yellow,
+          "DRY RUN - only running checks, no files will be modified",
+          :reset
+        ])
 
-      Mix.shell().info("")
-    else
-      # Phase 0: Update version in files
-      Mix.shell().info([:cyan, "Phase 1: Version Updates", :reset])
-      Mix.shell().info("")
+        Mix.shell().info("")
 
-      case update_version_files(new_version, current_version) do
-        :ok ->
-          Mix.shell().info("")
+      current_version == new_version ->
+        # "current" was used - no version updates needed
+        Mix.shell().info([:yellow, "Releasing current version (no file updates needed)", :reset])
+        Mix.shell().info("")
 
-        {:error, reason} ->
-          Mix.shell().error("Failed to update version files: #{reason}")
-          exit({:shutdown, 1})
-      end
+      true ->
+        # Phase 1: Update version in files
+        Mix.shell().info([:cyan, "Phase 1: Version Updates", :reset])
+        Mix.shell().info("")
+
+        case update_version_files(new_version, current_version) do
+          :ok ->
+            Mix.shell().info("")
+
+          {:error, reason} ->
+            Mix.shell().error("Failed to update version files: #{reason}")
+            exit({:shutdown, 1})
+        end
     end
 
     # Phase 1: Checks (now Phase 2)
@@ -324,6 +333,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
       "major" -> calculate_new_version(current_version, :major)
       "minor" -> calculate_new_version(current_version, :minor)
       "patch" -> calculate_new_version(current_version, :patch)
+      "current" -> {:ok, current_version}
       explicit -> validate_explicit_version(explicit, current_version)
     end
   end

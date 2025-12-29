@@ -28,6 +28,9 @@ mix easy_publish.release minor
 # Bump major version (0.1.0 -> 1.0.0)
 mix easy_publish.release major
 
+# Release current version as-is (for initial release)
+mix easy_publish.release current
+
 # Set explicit version
 mix easy_publish.release 2.0.0
 ```
