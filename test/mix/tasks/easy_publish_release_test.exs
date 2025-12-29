@@ -37,7 +37,9 @@ defmodule Mix.Tasks.EasyPublish.ReleaseTest do
       # Test that version calculation works correctly through the task
       output = run_and_capture(["patch", "--dry-run", "--skip-tests", "--skip-dialyzer"])
 
-      expected_patch = "#{current_parsed.major}.#{current_parsed.minor}.#{current_parsed.patch + 1}"
+      expected_patch =
+        "#{current_parsed.major}.#{current_parsed.minor}.#{current_parsed.patch + 1}"
+
       assert output =~ expected_patch
     end
 

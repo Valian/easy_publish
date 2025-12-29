@@ -234,11 +234,20 @@ defmodule Mix.Tasks.EasyPublish.Release do
     failed = Enum.count(results, &(&1 == :failed))
 
     info("")
+
     info([
-      :green, "Passed: #{passed}", :reset, "  ",
-      :yellow, "Skipped: #{skipped}", :reset, "  ",
-      :red, "Failed: #{failed}"
+      :green,
+      "Passed: #{passed}",
+      :reset,
+      "  ",
+      :yellow,
+      "Skipped: #{skipped}",
+      :reset,
+      "  ",
+      :red,
+      "Failed: #{failed}"
     ])
+
     info("")
 
     if failed > 0 do
@@ -256,7 +265,8 @@ defmodule Mix.Tasks.EasyPublish.Release do
       {"Code is formatted", &check_format/0, config.skip_format},
       {"Credo analysis passes", &check_credo/0, config.skip_credo},
       {"Dialyzer passes", &check_dialyzer/0, config.skip_dialyzer},
-      {"Changelog has UNRELEASED section", fn -> check_changelog(config.changelog_file) end, config.skip_changelog},
+      {"Changelog has UNRELEASED section", fn -> check_changelog(config.changelog_file) end,
+       config.skip_changelog},
       {"Hex package builds successfully", &check_hex_build/0, config.skip_hex_dry_run}
     ]
 
@@ -304,10 +314,12 @@ defmodule Mix.Tasks.EasyPublish.Release do
 
     steps = [
       {"Updating changelog", fn -> update_changelog(config.changelog_file, version) end},
-      {"Committing release v#{version}", fn -> commit_release(config.changelog_file, version) end},
+      {"Committing release v#{version}",
+       fn -> commit_release(config.changelog_file, version) end},
       {"Creating git tag v#{version}", fn -> create_tag(version) end},
       {"Pushing to remote", fn -> push_to_remote(version) end},
-      {"Creating GitHub release", fn -> create_github_release(version) end, config.skip_github_release},
+      {"Creating GitHub release", fn -> create_github_release(version) end,
+       config.skip_github_release},
       {"Publishing to Hex", &publish_to_hex/0}
     ]
 
@@ -368,11 +380,12 @@ defmodule Mix.Tasks.EasyPublish.Release do
     path = "mix.exs"
 
     with {:ok, content} <- File.read(path),
-         updated = Regex.replace(
-           ~r/@version\s+"#{Regex.escape(current_version)}"/,
-           content,
-           "@version \"#{new_version}\""
-         ),
+         updated =
+           Regex.replace(
+             ~r/@version\s+"#{Regex.escape(current_version)}"/,
+             content,
+             "@version \"#{new_version}\""
+           ),
          true <- updated != content,
          :ok <- File.write(path, updated) do
       info([:green, "✓ ", :reset, "Updated mix.exs"])
@@ -516,7 +529,8 @@ defmodule Mix.Tasks.EasyPublish.Release do
 
   # Changelog operations
 
-  defp has_unreleased?(content), do: content |> String.downcase() |> String.contains?("unreleased")
+  defp has_unreleased?(content),
+    do: content |> String.downcase() |> String.contains?("unreleased")
 
   defp add_changelog_entry(path, entry) do
     try do
@@ -526,7 +540,9 @@ defmodule Mix.Tasks.EasyPublish.Release do
         if has_unreleased?(content) do
           Regex.replace(~r/(##\s*unreleased\s*\n)/i, content, "\\1\n- #{entry}\n")
         else
-          Regex.replace(~r/(#[^\n]*\n+)/, content, "\\1## UNRELEASED\n\n- #{entry}\n\n", global: false)
+          Regex.replace(~r/(#[^\n]*\n+)/, content, "\\1## UNRELEASED\n\n- #{entry}\n\n",
+            global: false
+          )
         end
 
       File.write!(path, updated)
@@ -600,7 +616,9 @@ defmodule Mix.Tasks.EasyPublish.Release do
         :skip
 
       true ->
-        case System.cmd("gh", ["release", "create", tag, "--title", "Release #{tag}", "--generate-notes"],
+        case System.cmd(
+               "gh",
+               ["release", "create", tag, "--title", "Release #{tag}", "--generate-notes"],
                stderr_to_stdout: true
              ) do
           {_, 0} -> :ok
