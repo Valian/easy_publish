@@ -54,6 +54,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
     * `--skip-hex-dry-run` - Skip hex.publish --dry-run check
     * `--skip-github-release` - Skip GitHub release creation
     * `--branch NAME` - Required branch name (default: "main")
+    * `--changelog-entry CONTENT` - Add a changelog entry and skip UNRELEASED check
 
   ## Configuration
 
@@ -108,7 +109,8 @@ defmodule Mix.Tasks.EasyPublish.Release do
     skip_git: :boolean,
     skip_hex_dry_run: :boolean,
     skip_github_release: :boolean,
-    branch: :string
+    branch: :string,
+    changelog_entry: :string
   ]
 
   @default_config %{
@@ -121,7 +123,8 @@ defmodule Mix.Tasks.EasyPublish.Release do
     skip_git: false,
     skip_hex_dry_run: false,
     skip_github_release: false,
-    changelog_file: "CHANGELOG.md"
+    changelog_file: "CHANGELOG.md",
+    changelog_entry: nil
   }
 
   @impl Mix.Task
@@ -166,6 +169,23 @@ defmodule Mix.Tasks.EasyPublish.Release do
     ])
 
     Mix.shell().info("")
+
+    # Handle --changelog-entry: add entry and skip changelog check
+    config =
+      if config.changelog_entry do
+        case add_changelog_entry(config) do
+          :ok ->
+            Mix.shell().info([:green, "✓ ", :reset, "Added changelog entry"])
+            Mix.shell().info("")
+            Map.put(config, :skip_changelog, true)
+
+          {:error, reason} ->
+            Mix.shell().error("Failed to add changelog entry: #{reason}")
+            exit({:shutdown, 1})
+        end
+      else
+        config
+      end
 
     cond do
       config.dry_run ->
@@ -556,6 +576,52 @@ defmodule Mix.Tasks.EasyPublish.Release do
     content
     |> String.downcase()
     |> String.contains?("unreleased")
+  end
+
+  defp add_changelog_entry(config) do
+    changelog_file = config.changelog_file
+    entry = config.changelog_entry
+
+    if File.exists?(changelog_file) do
+      content = File.read!(changelog_file)
+
+      if has_unreleased_section?(content) do
+        # Add entry under existing UNRELEASED section
+        updated =
+          Regex.replace(
+            ~r/(##\s*unreleased\s*\n)/i,
+            content,
+            "\\1\n- #{entry}\n"
+          )
+
+        File.write!(changelog_file, updated)
+        :ok
+      else
+        # Create UNRELEASED section with entry
+        updated =
+          Regex.replace(
+            ~r/(#[^\n]*\n+)/,
+            content,
+            "\\1## UNRELEASED\n\n- #{entry}\n\n",
+            global: false
+          )
+
+        File.write!(changelog_file, updated)
+        :ok
+      end
+    else
+      # Create changelog file with UNRELEASED section
+      content = """
+      # Changelog
+
+      ## UNRELEASED
+
+      - #{entry}
+      """
+
+      File.write!(changelog_file, content)
+      :ok
+    end
   end
 
   # Hex checks
