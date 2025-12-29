@@ -329,50 +329,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
   end
 
   defp parse_version_arg([version_arg | _], current_version) do
-    case version_arg do
-      "major" -> calculate_new_version(current_version, :major)
-      "minor" -> calculate_new_version(current_version, :minor)
-      "patch" -> calculate_new_version(current_version, :patch)
-      "current" -> {:ok, current_version}
-      explicit -> validate_explicit_version(explicit, current_version)
-    end
-  end
-
-  defp calculate_new_version(current, bump_type) do
-    case Version.parse(current) do
-      {:ok, %Version{major: major, minor: minor, patch: patch}} ->
-        new_version =
-          case bump_type do
-            :major -> "#{major + 1}.0.0"
-            :minor -> "#{major}.#{minor + 1}.0"
-            :patch -> "#{major}.#{minor}.#{patch + 1}"
-          end
-
-        {:ok, new_version}
-
-      :error ->
-        {:error, "cannot parse current version '#{current}' as semver"}
-    end
-  end
-
-  defp validate_explicit_version(version, current_version) do
-    with {:ok, new} <- Version.parse(version),
-         {:ok, current} <- Version.parse(current_version) do
-      case Version.compare(new, current) do
-        :gt ->
-          {:ok, version}
-
-        :eq ->
-          {:error, "new version #{version} is the same as current version"}
-
-        :lt ->
-          {:error,
-           "new version #{version} must be greater than current version #{current_version}"}
-      end
-    else
-      :error ->
-        {:error, "invalid version format '#{version}', expected semver (e.g., 1.2.3)"}
-    end
+    EasyPublish.Version.parse_arg(version_arg, current_version)
   end
 
   # Version file updates
@@ -452,10 +409,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
   end
 
   defp extract_major_minor(version) do
-    case Version.parse(version) do
-      {:ok, %Version{major: major, minor: minor}} -> {major, minor}
-      :error -> {0, 0}
-    end
+    EasyPublish.Version.extract_major_minor(version)
   end
 
   defp run_check(name, description, check_fn, config, skip) do

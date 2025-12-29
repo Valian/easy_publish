@@ -1,18 +1,7 @@
 defmodule EasyPublish do
   @moduledoc """
-  Documentation for `EasyPublish`.
+  A complete release tool for Hex packages.
+
+  See `Mix.Tasks.EasyPublish.Release` for usage.
   """
-
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> EasyPublish.hello()
-      :world
-
-  """
-  def hello do
-    :world
-  end
 end
