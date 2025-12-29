@@ -16,22 +16,16 @@ end
 
 ## Usage
 
-Run checks only (no changes made):
+Perform a full release:
 
 ```bash
 mix easy_publish.release
 ```
 
-Perform a full release:
+Run checks only (no changes made):
 
 ```bash
-mix easy_publish.release --publish
-```
-
-Preview what would happen:
-
-```bash
-mix easy_publish.release --publish --dry-run
+mix easy_publish.release --dry-run
 ```
 
 ## Release Flow
@@ -92,8 +86,7 @@ When you run `mix easy_publish.release --publish` for version 0.2.0, it becomes:
 
 | Flag | Description |
 |------|-------------|
-| `--publish` | Perform the full release |
-| `--dry-run` | Show what would be done without making changes |
+| `--dry-run` | Only run checks, don't make any changes |
 | `--skip-tests` | Skip running tests |
 | `--skip-format` | Skip format check |
 | `--skip-credo` | Skip credo analysis |

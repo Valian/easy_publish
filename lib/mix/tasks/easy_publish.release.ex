@@ -8,7 +8,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
 
       mix easy_publish.release [options]
 
-  Without `--publish`, only runs checks. With `--publish`, performs the full release.
+  By default, performs the full release. Use `--dry-run` to only run checks.
 
   ## Release Flow
 
@@ -23,7 +23,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
      - UNRELEASED section exists in changelog
      - `hex.publish --dry-run` succeeds
 
-  2. **Release** (with `--publish`):
+  2. **Release**:
      - Updates changelog: replaces UNRELEASED with version and date
      - Commits the changelog change
      - Creates git tag (vX.Y.Z)
@@ -32,7 +32,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
 
   ## Options
 
-    * `--publish` - Perform the full release (default: only run checks)
+    * `--dry-run` - Only run checks, don't make any changes
     * `--skip-tests` - Skip running tests
     * `--skip-format` - Skip format check
     * `--skip-credo` - Skip credo analysis
@@ -41,7 +41,6 @@ defmodule Mix.Tasks.EasyPublish.Release do
     * `--skip-git` - Skip all git checks
     * `--skip-hex-dry-run` - Skip hex.publish --dry-run check
     * `--branch NAME` - Required branch name (default: "main")
-    * `--dry-run` - Show what would be done without making changes
 
   ## Configuration
 
@@ -86,7 +85,6 @@ defmodule Mix.Tasks.EasyPublish.Release do
   @requirements ["app.config"]
 
   @switches [
-    publish: :boolean,
     dry_run: :boolean,
     skip_tests: :boolean,
     skip_format: :boolean,
@@ -121,7 +119,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
     Mix.shell().info("")
 
     if config.dry_run do
-      Mix.shell().info([:yellow, "DRY RUN MODE - no changes will be made", :reset])
+      Mix.shell().info([:yellow, "DRY RUN - only running checks", :reset])
       Mix.shell().info("")
     end
 
@@ -176,15 +174,15 @@ defmodule Mix.Tasks.EasyPublish.Release do
       exit({:shutdown, 1})
     end
 
-    # Phase 2: Release (if --publish)
-    if opts[:publish] do
+    # Phase 2: Release (unless --dry-run)
+    if config.dry_run do
+      Mix.shell().info([:green, "All checks passed!", :reset])
+      Mix.shell().info("Run without --dry-run to perform the release.")
+    else
       Mix.shell().info([:cyan, "Phase 2: Release", :reset])
       Mix.shell().info("")
 
       release_steps(config, version)
-    else
-      Mix.shell().info([:green, "All checks passed!", :reset])
-      Mix.shell().info("Run with --publish to perform the release.")
     end
   end
 
@@ -200,19 +198,14 @@ defmodule Mix.Tasks.EasyPublish.Release do
     Enum.reduce_while(steps, :ok, fn {description, step_fn}, _acc ->
       Mix.shell().info([:cyan, "→ ", :reset, description, "..."])
 
-      if config.dry_run do
-        Mix.shell().info([:yellow, "  (skipped - dry run)", :reset])
-        {:cont, :ok}
-      else
-        case step_fn.(config, version) do
-          :ok ->
-            Mix.shell().info([:green, "  ✓ Done", :reset])
-            {:cont, :ok}
+      case step_fn.(config, version) do
+        :ok ->
+          Mix.shell().info([:green, "  ✓ Done", :reset])
+          {:cont, :ok}
 
-          {:error, reason} ->
-            Mix.shell().error("  ✗ Failed: #{reason}")
-            {:halt, {:error, reason}}
-        end
+        {:error, reason} ->
+          Mix.shell().error("  ✗ Failed: #{reason}")
+          {:halt, {:error, reason}}
       end
     end)
     |> case do
