@@ -115,6 +115,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
 
   @default_config %{
     branch: "main",
+    dry_run: false,
     skip_tests: false,
     skip_format: false,
     skip_credo: false,
@@ -582,45 +583,49 @@ defmodule Mix.Tasks.EasyPublish.Release do
     changelog_file = config.changelog_file
     entry = config.changelog_entry
 
-    if File.exists?(changelog_file) do
-      content = File.read!(changelog_file)
+    try do
+      if File.exists?(changelog_file) do
+        content = File.read!(changelog_file)
 
-      if has_unreleased_section?(content) do
-        # Add entry under existing UNRELEASED section
-        updated =
-          Regex.replace(
-            ~r/(##\s*unreleased\s*\n)/i,
-            content,
-            "\\1\n- #{entry}\n"
-          )
+        if has_unreleased_section?(content) do
+          # Add entry under existing UNRELEASED section
+          updated =
+            Regex.replace(
+              ~r/(##\s*unreleased\s*\n)/i,
+              content,
+              "\\1\n- #{entry}\n"
+            )
 
-        File.write!(changelog_file, updated)
-        :ok
+          File.write!(changelog_file, updated)
+          :ok
+        else
+          # Create UNRELEASED section with entry
+          updated =
+            Regex.replace(
+              ~r/(#[^\n]*\n+)/,
+              content,
+              "\\1## UNRELEASED\n\n- #{entry}\n\n",
+              global: false
+            )
+
+          File.write!(changelog_file, updated)
+          :ok
+        end
       else
-        # Create UNRELEASED section with entry
-        updated =
-          Regex.replace(
-            ~r/(#[^\n]*\n+)/,
-            content,
-            "\\1## UNRELEASED\n\n- #{entry}\n\n",
-            global: false
-          )
+        # Create changelog file with UNRELEASED section
+        content = """
+        # Changelog
 
-        File.write!(changelog_file, updated)
+        ## UNRELEASED
+
+        - #{entry}
+        """
+
+        File.write!(changelog_file, content)
         :ok
       end
-    else
-      # Create changelog file with UNRELEASED section
-      content = """
-      # Changelog
-
-      ## UNRELEASED
-
-      - #{entry}
-      """
-
-      File.write!(changelog_file, content)
-      :ok
+    rescue
+      e in File.Error -> {:error, Exception.message(e)}
     end
   end
 
