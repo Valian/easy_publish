@@ -1,18 +1,28 @@
 defmodule Mix.Tasks.EasyPublish.Release do
   @shortdoc "Run pre-release checks and publish to Hex"
   @moduledoc """
-  A complete release tool for Hex packages. Runs checks, updates changelog,
-  commits, tags, pushes, and publishes to Hex.
+  A complete release tool for Hex packages. Runs checks, updates versions,
+  changelog, commits, tags, pushes, and publishes to Hex.
 
   ## Usage
 
-      mix easy_publish.release [options]
+      mix easy_publish.release VERSION [options]
+
+  VERSION can be:
+    * `major` - Bump major version (1.2.3 -> 2.0.0)
+    * `minor` - Bump minor version (1.2.3 -> 1.3.0)
+    * `patch` - Bump patch version (1.2.3 -> 1.2.4)
+    * Explicit version like `2.0.0`
 
   By default, performs the full release. Use `--dry-run` to only run checks.
 
   ## Release Flow
 
-  1. **Checks** - Validates everything is ready:
+  1. **Version Update** - Updates version in:
+     - `mix.exs` (@version attribute)
+     - `README.md` (dependency declaration)
+
+  2. **Checks** - Validates everything is ready:
      - Git working directory is clean
      - On correct branch (default: main)
      - Git is up to date with remote
@@ -21,13 +31,14 @@ defmodule Mix.Tasks.EasyPublish.Release do
      - Credo passes (if installed)
      - Dialyzer passes (if installed)
      - UNRELEASED section exists in changelog
-     - `hex.publish --dry-run` succeeds
+     - `hex.build` succeeds (validates package)
 
-  2. **Release**:
+  3. **Release**:
      - Updates changelog: replaces UNRELEASED with version and date
-     - Commits the changelog change
+     - Commits all version changes
      - Creates git tag (vX.Y.Z)
      - Pushes commit and tag to remote
+     - Creates GitHub release (if gh CLI available)
      - Publishes to Hex
 
   ## Options
@@ -40,6 +51,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
     * `--skip-changelog` - Skip changelog check
     * `--skip-git` - Skip all git checks
     * `--skip-hex-dry-run` - Skip hex.publish --dry-run check
+    * `--skip-github-release` - Skip GitHub release creation
     * `--branch NAME` - Required branch name (default: "main")
 
   ## Configuration
@@ -55,6 +67,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
         skip_changelog: false,
         skip_git: false,
         skip_hex_dry_run: false,
+        skip_github_release: false,
         changelog_file: "CHANGELOG.md"
 
   CLI flags always override configuration.
@@ -93,6 +106,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
     skip_changelog: :boolean,
     skip_git: :boolean,
     skip_hex_dry_run: :boolean,
+    skip_github_release: :boolean,
     branch: :string
   ]
 
@@ -105,26 +119,78 @@ defmodule Mix.Tasks.EasyPublish.Release do
     skip_changelog: false,
     skip_git: false,
     skip_hex_dry_run: false,
+    skip_github_release: false,
     changelog_file: "CHANGELOG.md"
   }
 
   @impl Mix.Task
   def run(args) do
-    {opts, _rest} = OptionParser.parse!(args, strict: @switches)
+    {opts, rest} = OptionParser.parse!(args, strict: @switches)
     config = build_config(opts)
-    version = Mix.Project.config()[:version]
+    current_version = Mix.Project.config()[:version]
 
-    Mix.shell().info([:cyan, "EasyPublish Release v#{version}", :reset])
-    Mix.shell().info([:cyan, String.duplicate("=", 24 + String.length(version)), :reset])
+    case parse_version_arg(rest, current_version) do
+      {:ok, new_version} ->
+        do_release(config, current_version, new_version)
+
+      {:error, reason} ->
+        Mix.shell().error(reason)
+        Mix.shell().info("")
+        Mix.shell().info("Usage: mix easy_publish.release VERSION [options]")
+        Mix.shell().info("")
+        Mix.shell().info("VERSION can be:")
+        Mix.shell().info("  major  - Bump major version (1.2.3 -> 2.0.0)")
+        Mix.shell().info("  minor  - Bump minor version (1.2.3 -> 1.3.0)")
+        Mix.shell().info("  patch  - Bump patch version (1.2.3 -> 1.2.4)")
+        Mix.shell().info("  X.Y.Z  - Explicit version (e.g., 2.0.0)")
+        exit({:shutdown, 1})
+    end
+  end
+
+  defp do_release(config, current_version, new_version) do
+    Mix.shell().info([:cyan, "EasyPublish Release", :reset])
+    Mix.shell().info([:cyan, "===================", :reset])
+    Mix.shell().info("")
+
+    Mix.shell().info([
+      "Version: ",
+      :yellow,
+      current_version,
+      :reset,
+      " → ",
+      :green,
+      new_version,
+      :reset
+    ])
+
     Mix.shell().info("")
 
     if config.dry_run do
-      Mix.shell().info([:yellow, "DRY RUN - only running checks", :reset])
+      Mix.shell().info([
+        :yellow,
+        "DRY RUN - only running checks, no files will be modified",
+        :reset
+      ])
+
       Mix.shell().info("")
+    else
+      # Phase 0: Update version in files
+      Mix.shell().info([:cyan, "Phase 1: Version Updates", :reset])
+      Mix.shell().info("")
+
+      case update_version_files(new_version, current_version) do
+        :ok ->
+          Mix.shell().info("")
+
+        {:error, reason} ->
+          Mix.shell().error("Failed to update version files: #{reason}")
+          exit({:shutdown, 1})
+      end
     end
 
-    # Phase 1: Checks
-    Mix.shell().info([:cyan, "Phase 1: Pre-release Checks", :reset])
+    # Phase 1: Checks (now Phase 2)
+    phase_num = if config.dry_run, do: "1", else: "2"
+    Mix.shell().info([:cyan, "Phase #{phase_num}: Pre-release Checks", :reset])
     Mix.shell().info("")
 
     checks = [
@@ -138,7 +204,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
       {:dialyzer, "Dialyzer passes", &check_dialyzer/1, config.skip_dialyzer},
       {:changelog, "Changelog has UNRELEASED section", &check_changelog_unreleased/1,
        config.skip_changelog},
-      {:hex_dry_run, "Hex publish dry-run succeeds", &check_hex_dry_run/1,
+      {:hex_dry_run, "Hex package builds successfully", &check_hex_dry_run/1,
        config.skip_hex_dry_run}
     ]
 
@@ -174,26 +240,37 @@ defmodule Mix.Tasks.EasyPublish.Release do
       exit({:shutdown, 1})
     end
 
-    # Phase 2: Release (unless --dry-run)
+    # Phase 3: Release (unless --dry-run)
     if config.dry_run do
       Mix.shell().info([:green, "All checks passed!", :reset])
       Mix.shell().info("Run without --dry-run to perform the release.")
     else
-      Mix.shell().info([:cyan, "Phase 2: Release", :reset])
+      Mix.shell().info([:cyan, "Phase 3: Release", :reset])
       Mix.shell().info("")
 
-      release_steps(config, version)
+      release_steps(config, new_version)
     end
   end
 
   defp release_steps(config, version) do
-    steps = [
+    # Build steps dynamically based on config
+    base_steps = [
       {"Updating changelog", &update_changelog/2},
-      {"Committing changelog", &commit_changelog/2},
+      {"Committing release v#{version}", &commit_release/2},
       {"Creating git tag v#{version}", &create_tag/2},
-      {"Pushing to remote", &push_to_remote/2},
-      {"Publishing to Hex", &publish_to_hex/2}
+      {"Pushing to remote", &push_to_remote/2}
     ]
+
+    github_step =
+      if config.skip_github_release do
+        []
+      else
+        [{"Creating GitHub release", &create_github_release/2}]
+      end
+
+    hex_step = [{"Publishing to Hex", &publish_to_hex/2}]
+
+    steps = base_steps ++ github_step ++ hex_step
 
     Enum.reduce_while(steps, :ok, fn {description, step_fn}, _acc ->
       Mix.shell().info([:cyan, "→ ", :reset, description, "..."])
@@ -201,6 +278,10 @@ defmodule Mix.Tasks.EasyPublish.Release do
       case step_fn.(config, version) do
         :ok ->
           Mix.shell().info([:green, "  ✓ Done", :reset])
+          {:cont, :ok}
+
+        :skip ->
+          Mix.shell().info([:yellow, "  ○ Skipped", :reset])
           {:cont, :ok}
 
         {:error, reason} ->
@@ -230,6 +311,141 @@ defmodule Mix.Tasks.EasyPublish.Release do
     Enum.reduce(opts, app_config, fn {key, value}, acc ->
       Map.put(acc, key, value)
     end)
+  end
+
+  # Version parsing and calculation
+
+  defp parse_version_arg([], _current) do
+    {:error, "VERSION argument is required"}
+  end
+
+  defp parse_version_arg([version_arg | _], current_version) do
+    case version_arg do
+      "major" -> calculate_new_version(current_version, :major)
+      "minor" -> calculate_new_version(current_version, :minor)
+      "patch" -> calculate_new_version(current_version, :patch)
+      explicit -> validate_explicit_version(explicit, current_version)
+    end
+  end
+
+  defp calculate_new_version(current, bump_type) do
+    case Version.parse(current) do
+      {:ok, %Version{major: major, minor: minor, patch: patch}} ->
+        new_version =
+          case bump_type do
+            :major -> "#{major + 1}.0.0"
+            :minor -> "#{major}.#{minor + 1}.0"
+            :patch -> "#{major}.#{minor}.#{patch + 1}"
+          end
+
+        {:ok, new_version}
+
+      :error ->
+        {:error, "cannot parse current version '#{current}' as semver"}
+    end
+  end
+
+  defp validate_explicit_version(version, current_version) do
+    with {:ok, new} <- Version.parse(version),
+         {:ok, current} <- Version.parse(current_version) do
+      case Version.compare(new, current) do
+        :gt ->
+          {:ok, version}
+
+        :eq ->
+          {:error, "new version #{version} is the same as current version"}
+
+        :lt ->
+          {:error,
+           "new version #{version} must be greater than current version #{current_version}"}
+      end
+    else
+      :error ->
+        {:error, "invalid version format '#{version}', expected semver (e.g., 1.2.3)"}
+    end
+  end
+
+  # Version file updates
+
+  defp update_version_files(new_version, current_version) do
+    with :ok <- update_mix_exs(new_version, current_version),
+         :ok <- update_readme(new_version, current_version) do
+      :ok
+    end
+  end
+
+  defp update_mix_exs(new_version, current_version) do
+    path = "mix.exs"
+
+    if File.exists?(path) do
+      content = File.read!(path)
+
+      # Match @version "X.Y.Z" pattern
+      updated =
+        Regex.replace(
+          ~r/@version\s+"#{Regex.escape(current_version)}"/,
+          content,
+          "@version \"#{new_version}\""
+        )
+
+      if updated == content do
+        {:error, "could not find @version \"#{current_version}\" in mix.exs"}
+      else
+        File.write!(path, updated)
+        Mix.shell().info([:green, "✓ ", :reset, "Updated mix.exs"])
+        :ok
+      end
+    else
+      {:error, "mix.exs not found"}
+    end
+  end
+
+  defp update_readme(new_version, current_version) do
+    path = "README.md"
+
+    if File.exists?(path) do
+      content = File.read!(path)
+
+      # Extract major.minor for ~> format
+      {new_major, new_minor} = extract_major_minor(new_version)
+      {cur_major, cur_minor} = extract_major_minor(current_version)
+
+      # Match {:package_name, "~> X.Y"} pattern
+      # Use flexible pattern that matches any package name
+      updated =
+        Regex.replace(
+          ~r/(\{:\w+,\s*"~>\s*)#{cur_major}\.#{cur_minor}(")/,
+          content,
+          "\\g{1}#{new_major}.#{new_minor}\\g{2}"
+        )
+
+      if updated == content do
+        # Not an error - README might not have dependency version
+        Mix.shell().info([
+          :yellow,
+          "○ ",
+          :reset,
+          "README.md - no dependency version found (skipped)"
+        ])
+
+        :ok
+      else
+        File.write!(path, updated)
+        Mix.shell().info([:green, "✓ ", :reset, "Updated README.md"])
+        :ok
+      end
+    else
+      # README is optional
+      Mix.shell().info([:yellow, "○ ", :reset, "README.md not found (skipped)"])
+      :ok
+    end
+  end
+
+  defp extract_major_minor(version) do
+    case Version.parse(version) do
+      {:ok, %Version{major: major, minor: minor}} -> {major, minor}
+      :error -> {0, 0}
+    end
   end
 
   defp run_check(name, description, check_fn, config, skip) do
@@ -381,16 +597,17 @@ defmodule Mix.Tasks.EasyPublish.Release do
   # Hex checks
 
   defp check_hex_dry_run(_config) do
-    case System.cmd("mix", ["hex.publish", "--dry-run"], stderr_to_stdout: true) do
+    # Use hex.build instead of hex.publish --dry-run because dry-run still prompts for auth
+    case System.cmd("mix", ["hex.build"], stderr_to_stdout: true) do
       {output, 0} ->
-        if String.contains?(output, "error") and not String.contains?(output, "No errors") do
-          {:error, "hex.publish dry-run issues\n#{last_lines(output, 5)}"}
+        if String.contains?(output, "error") or String.contains?(output, "Error") do
+          {:error, "hex.build issues\n#{last_lines(output, 5)}"}
         else
           :ok
         end
 
       {output, _} ->
-        {:error, "hex.publish dry-run failed\n#{last_lines(output, 5)}"}
+        {:error, "hex.build failed\n#{last_lines(output, 5)}"}
     end
   end
 
@@ -417,18 +634,21 @@ defmodule Mix.Tasks.EasyPublish.Release do
     end
   end
 
-  defp commit_changelog(config, version) do
+  defp commit_release(config, version) do
     changelog_file = config.changelog_file
 
-    case System.cmd("git", ["add", changelog_file], stderr_to_stdout: true) do
-      {_, 0} ->
-        case System.cmd("git", ["commit", "-m", "Release v#{version}"], stderr_to_stdout: true) do
-          {_, 0} -> :ok
-          {error, _} -> {:error, String.trim(error)}
-        end
+    # Add all release-related files
+    files_to_add = ["mix.exs", "README.md", changelog_file]
 
-      {error, _} ->
-        {:error, String.trim(error)}
+    Enum.each(files_to_add, fn file ->
+      if File.exists?(file) do
+        System.cmd("git", ["add", file], stderr_to_stdout: true)
+      end
+    end)
+
+    case System.cmd("git", ["commit", "-m", "Release v#{version}"], stderr_to_stdout: true) do
+      {_, 0} -> :ok
+      {error, _} -> {:error, String.trim(error)}
     end
   end
 
@@ -449,6 +669,36 @@ defmodule Mix.Tasks.EasyPublish.Release do
       :ok
     else
       {error, _} -> {:error, String.trim(error)}
+    end
+  end
+
+  defp create_github_release(_config, version) do
+    tag = "v#{version}"
+
+    # Check if gh CLI is available
+    case System.find_executable("gh") do
+      nil ->
+        Mix.shell().info("    (gh CLI not installed)")
+        :skip
+
+      _gh_path ->
+        # Check if we're in a GitHub repo
+        case System.cmd("gh", ["repo", "view", "--json", "name"], stderr_to_stdout: true) do
+          {_, 0} ->
+            # Create release with auto-generated notes from changelog
+            case System.cmd(
+                   "gh",
+                   ["release", "create", tag, "--title", "Release #{tag}", "--generate-notes"],
+                   stderr_to_stdout: true
+                 ) do
+              {_, 0} -> :ok
+              {error, _} -> {:error, "gh release failed: #{String.trim(error)}"}
+            end
+
+          {_, _} ->
+            Mix.shell().info("    (not a GitHub repository)")
+            :skip
+        end
     end
   end
 
