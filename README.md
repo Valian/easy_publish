@@ -1,6 +1,6 @@
 # EasyPublish
 
-A Mix task that runs pre-release checks to ensure your Elixir package is ready for publication to Hex.
+A complete release tool for Hex packages. Runs pre-release checks, updates changelog, commits, tags, pushes, and publishes to Hex.
 
 ## Installation
 
@@ -14,43 +14,86 @@ def deps do
 end
 ```
 
-Then run:
-
-```bash
-mix deps.get
-```
-
 ## Usage
 
-Run the release checks:
+Run checks only (no changes made):
 
 ```bash
 mix easy_publish.release
 ```
 
-If all checks pass and you want to publish:
+Perform a full release:
 
 ```bash
 mix easy_publish.release --publish
 ```
 
-## Checks Performed
+Preview what would happen:
 
-1. **Git working directory is clean** - No uncommitted changes
-2. **On correct branch** - Default: `main`
-3. **Git is up to date with remote** - No unpushed commits, not behind remote
-4. **Tests pass** - `mix test`
-5. **Code is formatted** - `mix format --check-formatted`
-6. **Credo analysis passes** - Only if credo is a dependency
-7. **Dialyzer passes** - Only if dialyxir is a dependency
-8. **Changelog has entry for current version** - Checks CHANGELOG.md
-9. **Hex publish dry-run succeeds** - `mix hex.publish --dry-run`
+```bash
+mix easy_publish.release --publish --dry-run
+```
+
+## Release Flow
+
+### Phase 1: Pre-release Checks
+
+1. Git working directory is clean
+2. On correct branch (default: `main`)
+3. Git is up to date with remote
+4. Tests pass (`mix test`)
+5. Code is formatted (`mix format --check-formatted`)
+6. Credo passes (if installed)
+7. Dialyzer passes (if installed)
+8. **UNRELEASED section exists in changelog**
+9. `mix hex.publish --dry-run` succeeds
+
+### Phase 2: Release (with `--publish`)
+
+1. Updates changelog: replaces `## UNRELEASED` with `## X.Y.Z - YYYY-MM-DD`
+2. Commits the changelog change
+3. Creates git tag `vX.Y.Z`
+4. Pushes commit and tag to remote
+5. Publishes to Hex
+
+## Changelog Format
+
+Your `CHANGELOG.md` should have an UNRELEASED section:
+
+```markdown
+# Changelog
+
+## UNRELEASED
+
+- Added new feature
+- Fixed bug
+
+## 0.1.0 - 2024-01-15
+
+- Initial release
+```
+
+When you run `mix easy_publish.release --publish` for version 0.2.0, it becomes:
+
+```markdown
+# Changelog
+
+## 0.2.0 - 2024-01-20
+
+- Added new feature
+- Fixed bug
+
+## 0.1.0 - 2024-01-15
+
+- Initial release
+```
 
 ## Options
 
 | Flag | Description |
 |------|-------------|
-| `--publish` | Actually publish to Hex after all checks pass |
+| `--publish` | Perform the full release |
+| `--dry-run` | Show what would be done without making changes |
 | `--skip-tests` | Skip running tests |
 | `--skip-format` | Skip format check |
 | `--skip-credo` | Skip credo analysis |
@@ -67,13 +110,6 @@ Configure defaults in your `config/config.exs`:
 ```elixir
 config :easy_publish,
   branch: "main",
-  skip_tests: false,
-  skip_format: false,
-  skip_credo: false,
-  skip_dialyzer: false,
-  skip_changelog: false,
-  skip_git: false,
-  skip_hex_dry_run: false,
   changelog_file: "CHANGELOG.md"
 ```
 
