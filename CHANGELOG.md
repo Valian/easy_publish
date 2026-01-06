@@ -1,5 +1,9 @@
 # Changelog
 
+## UNRELEASED
+
+- Fix stdin not being passed to hex.publish password prompt
+
 ## 0.1.1 - 2026-01-06
 
 - bugfix: check for a clean git workspace

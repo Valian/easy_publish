@@ -74,6 +74,19 @@ defmodule Mix.Tasks.EasyPublish.Release do
 
   CLI flags always override configuration.
 
+  ## CI/Automation
+
+  For automated publishing (e.g., in CI), set the `HEX_API_KEY` environment variable
+  instead of using interactive authentication:
+
+      # Generate a key with publish permissions
+      mix hex.user key generate --key-name publish-ci --permission api:write
+
+      # Use in CI
+      HEX_API_KEY=your_key mix easy_publish.release patch
+
+  This bypasses the local password prompt that would otherwise require interactive input.
+
   ## Changelog Format
 
   Your changelog should have an UNRELEASED section that will be replaced:
@@ -466,24 +479,31 @@ defmodule Mix.Tasks.EasyPublish.Release do
   end
 
   defp check_tests do
-    case run_streaming("mix", ["test"], [{"MIX_ENV", "test"}]) do
-      0 -> :ok
-      _ -> {:error, "tests failed"}
-    end
+    original_env = Mix.env()
+    Mix.env(:test)
+
+    result =
+      case run_mix_task("test") do
+        :ok -> :ok
+        {:error, _} -> {:error, "tests failed"}
+      end
+
+    Mix.env(original_env)
+    result
   end
 
   defp check_format do
-    case System.cmd("mix", ["format", "--check-formatted"], stderr_to_stdout: true) do
-      {_, 0} -> :ok
-      {_, _} -> {:error, "code is not formatted, run: mix format"}
+    case run_mix_task("format", ["--check-formatted"]) do
+      :ok -> :ok
+      {:error, _} -> {:error, "code is not formatted, run: mix format"}
     end
   end
 
   defp check_credo do
     if has_dep?(:credo) do
-      case run_streaming("mix", ["credo", "--strict"]) do
-        0 -> :ok
-        _ -> {:error, "credo issues found"}
+      case run_mix_task("credo", ["--strict"]) do
+        :ok -> :ok
+        {:error, _} -> {:error, "credo issues found"}
       end
     else
       :skip
@@ -492,9 +512,9 @@ defmodule Mix.Tasks.EasyPublish.Release do
 
   defp check_dialyzer do
     if has_dep?(:dialyxir) do
-      case run_streaming("mix", ["dialyzer"]) do
-        0 -> :ok
-        _ -> {:error, "dialyzer errors"}
+      case run_mix_task("dialyzer") do
+        :ok -> :ok
+        {:error, _} -> {:error, "dialyzer errors"}
       end
     else
       :skip
@@ -517,9 +537,9 @@ defmodule Mix.Tasks.EasyPublish.Release do
   end
 
   defp check_hex_build do
-    case run_streaming("mix", ["hex.build"]) do
-      0 -> :ok
-      _ -> {:error, "hex.build failed"}
+    case run_mix_task("hex.build") do
+      :ok -> :ok
+      {:error, _} -> {:error, "hex.build failed"}
     end
   end
 
@@ -628,10 +648,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
   end
 
   defp publish_to_hex do
-    case Mix.shell().cmd("mix hex.publish --yes") do
-      0 -> :ok
-      _ -> {:error, "hex.publish failed"}
-    end
+    run_mix_task("hex.publish", ["--yes"])
   end
 
   # Helpers
@@ -645,11 +662,20 @@ defmodule Mix.Tasks.EasyPublish.Release do
     end)
   end
 
-  defp run_streaming(cmd, args, env \\ []) do
-    env_str = Enum.map_join(env, " ", fn {k, v} -> "#{k}=#{v}" end)
-    cmd_str = Enum.join([cmd | args], " ")
-    full_cmd = if env_str == "", do: cmd_str, else: "#{env_str} #{cmd_str}"
-    Mix.shell().cmd(full_cmd)
+  # Runs a mix task in the same process to properly inherit stdin.
+  # Returns :ok on success, {:error, reason} on failure.
+  defp run_mix_task(task, args \\ []) do
+    Mix.Task.run(task, args)
+    :ok
+  rescue
+    e in Mix.NoTaskError ->
+      {:error, Exception.message(e)}
+
+    e in Mix.Error ->
+      {:error, Exception.message(e)}
+  catch
+    :exit, {:shutdown, 1} ->
+      {:error, "#{task} failed"}
   end
 
   defp info(msg), do: Mix.shell().info(msg)
