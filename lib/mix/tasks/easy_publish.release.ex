@@ -162,7 +162,8 @@ defmodule Mix.Tasks.EasyPublish.Release do
   defp do_release(config, current_version, new_version) do
     print_header(current_version, new_version)
 
-    config = maybe_add_changelog_entry(config)
+    # Skip changelog check when --changelog-entry is provided (we'll add/create UNRELEASED section)
+    config = if config.changelog_entry, do: %{config | skip_changelog: true}, else: config
 
     if config.dry_run do
       info([:yellow, "DRY RUN - only running checks, no files will be modified"])
@@ -172,6 +173,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
       info("Run without --dry-run to perform the release.")
     else
       run_checks_and_report(config)
+      maybe_add_changelog_entry(config)
       maybe_update_version_files(current_version, new_version)
       run_release_steps(config, new_version)
     end
@@ -188,14 +190,13 @@ defmodule Mix.Tasks.EasyPublish.Release do
   defp maybe_add_changelog_entry(config) do
     case config.changelog_entry do
       nil ->
-        config
+        :ok
 
       entry ->
         case add_changelog_entry(config.changelog_file, entry) do
           :ok ->
             info([:green, "✓ ", :reset, "Added changelog entry"])
             info("")
-            %{config | skip_changelog: true}
 
           {:error, reason} ->
             error("Failed to add changelog entry: #{reason}")
