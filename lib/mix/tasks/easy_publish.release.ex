@@ -171,8 +171,8 @@ defmodule Mix.Tasks.EasyPublish.Release do
       info([:green, "All checks passed!"])
       info("Run without --dry-run to perform the release.")
     else
-      maybe_update_version_files(current_version, new_version)
       run_checks_and_report(config)
+      maybe_update_version_files(current_version, new_version)
       run_release_steps(config, new_version)
     end
   end
