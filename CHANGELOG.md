@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 - 2026-01-06
+
+- bugfix: check for a clean git workspace
+
 ## 0.1.0 - 2025-12-29
 
 - Add `mix easy_publish.release` task with full release automation
