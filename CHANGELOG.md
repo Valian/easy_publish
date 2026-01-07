@@ -1,6 +1,6 @@
 # Changelog
 
-## UNRELEASED
+## 0.1.2 - 2026-01-07
 
 - Fix stdin not being passed to hex.publish password prompt
 
