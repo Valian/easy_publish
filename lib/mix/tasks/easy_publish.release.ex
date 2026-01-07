@@ -143,6 +143,7 @@ defmodule Mix.Tasks.EasyPublish.Release do
 
   @impl Mix.Task
   def run(args) do
+    Mix.ensure_application!(:hex)
     {opts, rest} = OptionParser.parse!(args, strict: @switches)
     config = build_config(opts)
     current_version = Mix.Project.config()[:version]
