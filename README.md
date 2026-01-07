@@ -43,32 +43,89 @@ mix easy_publish.release patch --dry-run
 
 ## Release Flow
 
-### Phase 1: Version Updates
+EasyPublish uses a step-based architecture. Steps run in two phases:
 
-Updates version in all relevant files:
-- `mix.exs` - updates `@version` attribute
-- `README.md` - updates dependency version (e.g., `{:my_package, "~> 0.2"}`)
+1. **Check phase** - All steps run their `check/1` callback to validate preconditions
+2. **Run phase** - All steps run their `run/1` callback to execute actions
 
-### Phase 2: Pre-release Checks
+If any step fails in either phase, the pipeline halts.
 
-1. Git working directory is clean
-2. On correct branch (default: `main`)
-3. Git is up to date with remote
-4. Tests pass (`mix test`)
-5. Code is formatted (`mix format --check-formatted`)
-6. Credo passes (if installed)
-7. Dialyzer passes (if installed)
-8. **UNRELEASED section exists in changelog**
-9. `mix hex.build` succeeds (validates package)
+### Default Steps
 
-### Phase 3: Release
+| # | Step | Module | Description |
+|---|------|--------|-------------|
+| 1 | Git working directory is clean | `GitClean` | Ensures no uncommitted changes exist |
+| 2 | On correct branch | `GitBranch` | Verifies current branch matches expected (default: `main`) |
+| 3 | Git is up to date with remote | `GitUpToDate` | Checks local branch isn't behind/ahead/diverged from remote |
+| 4 | Tests pass | `Tests` | Runs `mix test` |
+| 5 | Code is formatted | `Format` | Runs `mix format --check-formatted` |
+| 6 | Credo analysis passes | `Credo` | Runs `mix credo --strict` (skipped if not installed) |
+| 7 | Dialyzer passes | `Dialyzer` | Runs `mix dialyzer` (skipped if not installed) |
+| 8 | Changelog has UNRELEASED section | `ChangelogEntry` | Ensures changelog has content to release |
+| 9 | Hex package builds successfully | `HexBuild` | Runs `mix hex.build` to validate package |
+| 10 | Updating version files | `UpdateVersion` | Updates `@version` in mix.exs and README.md dependency |
+| 11 | Updating changelog | `UpdateChangelog` | Replaces `## UNRELEASED` with `## X.Y.Z - YYYY-MM-DD` |
+| 12 | Committing release | `GitCommit` | Commits mix.exs, README.md, and CHANGELOG.md |
+| 13 | Creating git tag | `GitTag` | Creates annotated tag `vX.Y.Z` |
+| 14 | Pushing to remote | `GitPush` | Pushes commit and tag to remote |
+| 15 | Creating GitHub release | `GitHubRelease` | Creates GitHub release via `gh` CLI (skipped if not available) |
+| 16 | Publishing to Hex | `HexPublish` | Runs `mix hex.publish --yes` |
 
-1. Updates changelog: replaces `## UNRELEASED` with `## X.Y.Z - YYYY-MM-DD`
-2. Commits all version changes (mix.exs, README.md, CHANGELOG.md)
-3. Creates git tag `vX.Y.Z`
-4. Pushes commit and tag to remote
-5. Creates GitHub release (if `gh` CLI available)
-6. Publishes to Hex
+All step modules are under `EasyPublish.Steps.*`.
+
+### Custom Steps
+
+Create custom steps by implementing the `EasyPublish.Step` behaviour:
+
+```elixir
+defmodule MyApp.Steps.NotifySlack do
+  use EasyPublish.Step, name: "Notify Slack"
+
+  @impl true
+  def options do
+    [{:slack_webhook, type: :string, required: true, doc: "Slack webhook URL"}]
+  end
+
+  @impl true
+  def run(ctx) do
+    if ctx.dry_run do
+      info("Would notify Slack")
+      :ok
+    else
+      # Send notification
+      :ok
+    end
+  end
+end
+```
+
+**Return values:**
+- `:ok` - Success
+- `{:ok, updated_ctx}` - Success with updated context
+- `:skip` - Skipped (no reason shown)
+- `{:skip, reason}` - Skipped with reason
+- `{:error, reason}` - Failure, halts pipeline
+
+### Configuring Steps
+
+```elixir
+# config/config.exs
+
+# Replace all default steps
+config :easy_publish,
+  steps: [
+    EasyPublish.Steps.GitClean,
+    EasyPublish.Steps.Tests,
+    MyApp.Steps.CustomStep,
+    EasyPublish.Steps.HexPublish
+  ]
+
+# Or modify defaults
+config :easy_publish,
+  prepend_steps: [MyApp.Steps.BeforeRelease],
+  append_steps: [MyApp.Steps.NotifySlack],
+  skip_steps: [EasyPublish.Steps.Dialyzer]
+```
 
 ## Changelog Format
 
@@ -113,7 +170,7 @@ When you run `mix easy_publish.release minor` for version 0.2.0, it becomes:
 | `--skip-dialyzer` | Skip dialyzer |
 | `--skip-changelog` | Skip changelog check |
 | `--skip-git` | Skip all git checks |
-| `--skip-hex-dry-run` | Skip hex.build validation |
+| `--skip-hex-build` | Skip hex.build validation |
 | `--skip-github-release` | Skip GitHub release creation |
 | `--branch NAME` | Required branch name (default: "main") |
 | `--changelog-entry CONTENT` | Add a changelog entry and skip UNRELEASED check |
@@ -152,7 +209,7 @@ config :easy_publish,
   skip_dialyzer: false,
   skip_changelog: false,
   skip_git: false,
-  skip_hex_dry_run: false
+  skip_hex_build: false
 ```
 
 CLI flags always override configuration.
