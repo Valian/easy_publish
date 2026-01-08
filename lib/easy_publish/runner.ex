@@ -13,8 +13,8 @@ defmodule EasyPublish.Runner do
   # Core options that are always available (set by the release task, not steps)
   @core_options %{
     dry_run: [type: :boolean, default: false, doc: "Preview without making changes"],
-    version_current: [type: :string, doc: "Current version"],
-    version_new: [type: :string, doc: "New version to release"]
+    version_current: [type: :string, required: true, doc: "Current version"],
+    version_new: [type: :string, required: true, doc: "New version to release"]
   }
 
   @doc """
@@ -66,12 +66,26 @@ defmodule EasyPublish.Runner do
   end
 
   defp collect_options(steps) do
-    steps
-    |> Enum.flat_map(fn step ->
-      Code.ensure_loaded!(step)
-      if function_exported?(step, :options, 0), do: step.options(), else: []
+    all_options =
+      steps
+      |> Enum.flat_map(fn step ->
+        Code.ensure_loaded!(step)
+        if function_exported?(step, :options, 0), do: step.options(), else: []
+      end)
+
+    # Warn about duplicate options
+    all_options
+    |> Enum.map(fn {key, _} -> key end)
+    |> Enum.frequencies()
+    |> Enum.filter(fn {_, count} -> count > 1 end)
+    |> Enum.each(fn {key, count} ->
+      Mix.shell().info([
+        :yellow,
+        "Warning: option :#{key} is declared by #{count} steps"
+      ])
     end)
-    |> Map.new()
+
+    Map.new(all_options)
   end
 
   defp run_phase(phase, steps, context) do

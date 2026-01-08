@@ -13,18 +13,18 @@ defmodule EasyPublish.Steps.HexBuildTest do
     end
   end
 
-  describe "run/1" do
+  describe "check/1" do
     test "returns :skip when skip_hex_build is true" do
       ctx = %{skip_hex_build: true, dry_run: false}
 
-      assert HexBuild.run(ctx) == :skip
+      assert HexBuild.check(ctx) == :skip
     end
 
     test "logs 'Would run: mix hex.build' in dry_run mode" do
       Mix.shell(Mix.Shell.Process)
 
       ctx = %{dry_run: true, skip_hex_build: false}
-      result = HexBuild.run(ctx)
+      result = HexBuild.check(ctx)
 
       assert result == :ok
       assert_receive {:mix_shell, :info, [msg]}

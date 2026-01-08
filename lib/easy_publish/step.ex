@@ -47,13 +47,14 @@ defmodule EasyPublish.Step do
   - `{:error, reason}` - Failure, halts pipeline
   """
 
-  @type result :: :ok | :skip | {:skip, reason :: term()} | {:error, reason :: term()}
+  @type result ::
+          :ok | {:ok, context()} | :skip | {:skip, reason :: term()} | {:error, reason :: term()}
   @type context :: map()
   @type option_def :: {atom(), keyword()}
 
   @callback options() :: [option_def()]
-  @callback check(context()) :: result() | {:ok, context()}
-  @callback run(context()) :: result() | {:ok, context()}
+  @callback check(context()) :: result()
+  @callback run(context()) :: result()
 
   @optional_callbacks options: 0, check: 1, run: 1
 

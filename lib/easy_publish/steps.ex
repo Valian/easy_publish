@@ -23,7 +23,7 @@ defmodule EasyPublish.Steps do
   """
 
   @default_steps [
-    # Pre-checks
+    # Pre-checks (run in check phase)
     EasyPublish.Steps.GitClean,
     EasyPublish.Steps.GitBranch,
     EasyPublish.Steps.GitUpToDate,
@@ -31,11 +31,10 @@ defmodule EasyPublish.Steps do
     EasyPublish.Steps.Format,
     EasyPublish.Steps.Credo,
     EasyPublish.Steps.Dialyzer,
-    EasyPublish.Steps.ChangelogEntry,
+    EasyPublish.Steps.Changelog,
     EasyPublish.Steps.HexBuild,
-    # Release actions
+    # Release actions (run in run phase)
     EasyPublish.Steps.UpdateVersion,
-    EasyPublish.Steps.UpdateChangelog,
     EasyPublish.Steps.GitCommit,
     EasyPublish.Steps.GitTag,
     EasyPublish.Steps.GitPush,

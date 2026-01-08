@@ -52,24 +52,23 @@ If any step fails in either phase, the pipeline halts.
 
 ### Default Steps
 
-| # | Step | Module | Description |
-|---|------|--------|-------------|
-| 1 | Git working directory is clean | `GitClean` | Ensures no uncommitted changes exist |
-| 2 | On correct branch | `GitBranch` | Verifies current branch matches expected (default: `main`) |
-| 3 | Git is up to date with remote | `GitUpToDate` | Checks local branch isn't behind/ahead/diverged from remote |
-| 4 | Tests pass | `Tests` | Runs `mix test` |
-| 5 | Code is formatted | `Format` | Runs `mix format --check-formatted` |
-| 6 | Credo analysis passes | `Credo` | Runs `mix credo --strict` (skipped if not installed) |
-| 7 | Dialyzer passes | `Dialyzer` | Runs `mix dialyzer` (skipped if not installed) |
-| 8 | Changelog has UNRELEASED section | `ChangelogEntry` | Ensures changelog has content to release |
-| 9 | Hex package builds successfully | `HexBuild` | Runs `mix hex.build` to validate package |
-| 10 | Updating version files | `UpdateVersion` | Updates `@version` in mix.exs and README.md dependency |
-| 11 | Updating changelog | `UpdateChangelog` | Replaces `## UNRELEASED` with `## X.Y.Z - YYYY-MM-DD` |
-| 12 | Committing release | `GitCommit` | Commits mix.exs, README.md, and CHANGELOG.md |
-| 13 | Creating git tag | `GitTag` | Creates annotated tag `vX.Y.Z` |
-| 14 | Pushing to remote | `GitPush` | Pushes commit and tag to remote |
-| 15 | Creating GitHub release | `GitHubRelease` | Creates GitHub release via `gh` CLI (skipped if not available) |
-| 16 | Publishing to Hex | `HexPublish` | Runs `mix hex.publish --yes` |
+| # | Step | Module | Phase | Description |
+|---|------|--------|-------|-------------|
+| 1 | Git working directory is clean | `GitClean` | check | Ensures no uncommitted changes exist |
+| 2 | On correct branch | `GitBranch` | check | Verifies current branch matches expected (default: `main`) |
+| 3 | Git is up to date with remote | `GitUpToDate` | check | Checks local branch isn't behind/ahead/diverged from remote |
+| 4 | Tests pass | `Tests` | check | Runs `mix test` |
+| 5 | Code is formatted | `Format` | check | Runs `mix format --check-formatted` |
+| 6 | Credo analysis passes | `Credo` | check | Runs `mix credo --strict` (skipped if not installed) |
+| 7 | Dialyzer passes | `Dialyzer` | check | Runs `mix dialyzer` (skipped if not installed) |
+| 8 | Changelog | `Changelog` | check+run | Validates UNRELEASED section exists, then updates it |
+| 9 | Hex package builds successfully | `HexBuild` | check | Runs `mix hex.build` to validate package |
+| 10 | Updating version files | `UpdateVersion` | run | Updates `@version` in mix.exs and README.md dependency |
+| 11 | Committing release | `GitCommit` | run | Commits mix.exs, README.md, and CHANGELOG.md |
+| 12 | Creating git tag | `GitTag` | run | Creates annotated tag `vX.Y.Z` |
+| 13 | Pushing to remote | `GitPush` | run | Pushes commit and tag to remote |
+| 14 | Creating GitHub release | `GitHubRelease` | run | Creates GitHub release via `gh` CLI (skipped if not available) |
+| 15 | Publishing to Hex | `HexPublish` | run | Runs `mix hex.publish --yes` |
 
 All step modules are under `EasyPublish.Steps.*`.
 
@@ -80,6 +79,8 @@ Create custom steps by implementing the `EasyPublish.Step` behaviour:
 ```elixir
 defmodule MyApp.Steps.NotifySlack do
   use EasyPublish.Step, name: "Notify Slack"
+  # `use EasyPublish.Step` imports helper functions: info/1, warn/1, error/1,
+  # git/1, run_mix_task/1, has_dep?/1, has_executable?/1
 
   @impl true
   def options do

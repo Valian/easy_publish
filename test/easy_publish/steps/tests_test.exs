@@ -13,11 +13,11 @@ defmodule EasyPublish.Steps.TestsTest do
     end
   end
 
-  describe "run/1" do
+  describe "check/1" do
     test "returns :skip when skip_tests is true" do
       ctx = %{skip_tests: true}
 
-      assert Tests.run(ctx) == :skip
+      assert Tests.check(ctx) == :skip
     end
 
     test "logs dry run message and returns :ok when dry_run is true" do
@@ -25,7 +25,7 @@ defmodule EasyPublish.Steps.TestsTest do
 
       try do
         ctx = %{dry_run: true, skip_tests: false}
-        result = Tests.run(ctx)
+        result = Tests.check(ctx)
 
         assert result == :ok
         assert_receive {:mix_shell, :info, [msg]}

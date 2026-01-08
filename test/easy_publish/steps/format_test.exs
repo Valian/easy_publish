@@ -13,18 +13,18 @@ defmodule EasyPublish.Steps.FormatTest do
     end
   end
 
-  describe "run/1" do
+  describe "check/1" do
     test "returns :skip when skip_format is true" do
       ctx = %{skip_format: true}
 
-      assert Format.run(ctx) == :skip
+      assert Format.check(ctx) == :skip
     end
 
     test "logs dry-run message and returns :ok when dry_run is true" do
       Mix.shell(Mix.Shell.Process)
 
       ctx = %{skip_format: false, dry_run: true}
-      result = Format.run(ctx)
+      result = Format.check(ctx)
 
       assert result == :ok
       assert_receive {:mix_shell, :info, [msg]}
@@ -37,7 +37,7 @@ defmodule EasyPublish.Steps.FormatTest do
       ctx = %{skip_format: false, dry_run: false}
 
       # The test project should be formatted
-      result = Format.run(ctx)
+      result = Format.check(ctx)
 
       # If the code is formatted, expect :ok
       # If there happen to be formatting issues, that's also valid behavior

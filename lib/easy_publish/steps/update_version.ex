@@ -63,10 +63,13 @@ defmodule EasyPublish.Steps.UpdateVersion do
           )
 
         if updated != content do
-          File.write!(path, updated)
+          case File.write(path, updated) do
+            :ok -> :ok
+            {:error, reason} -> {:error, "README.md: #{inspect(reason)}"}
+          end
+        else
+          :ok
         end
-
-        :ok
 
       {:error, :enoent} ->
         :ok

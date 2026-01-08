@@ -13,11 +13,11 @@ defmodule EasyPublish.Steps.CredoTest do
     end
   end
 
-  describe "run/1" do
+  describe "check/1" do
     test "returns :skip when skip_credo is true" do
       ctx = %{skip_credo: true}
 
-      assert Credo.run(ctx) == :skip
+      assert Credo.check(ctx) == :skip
     end
 
     test "returns {:skip, reason} when credo is not installed" do
@@ -31,7 +31,7 @@ defmodule EasyPublish.Steps.CredoTest do
 
       if not has_credo? do
         ctx = %{skip_credo: false}
-        assert Credo.run(ctx) == {:skip, "not installed"}
+        assert Credo.check(ctx) == {:skip, "not installed"}
       end
     end
 
@@ -49,7 +49,7 @@ defmodule EasyPublish.Steps.CredoTest do
         Mix.shell(Mix.Shell.Process)
 
         ctx = %{skip_credo: false, dry_run: true}
-        result = Credo.run(ctx)
+        result = Credo.check(ctx)
 
         assert result == :ok
         assert_receive {:mix_shell, :info, [msg]}
