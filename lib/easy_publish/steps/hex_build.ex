@@ -11,7 +11,7 @@ defmodule EasyPublish.Steps.HexBuild do
   end
 
   @impl true
-  def check(ctx) do
+  def execute(ctx) do
     cond do
       ctx.skip_hex_build ->
         :skip

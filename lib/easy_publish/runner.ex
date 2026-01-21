@@ -1,13 +1,12 @@
 defmodule EasyPublish.Runner do
   @moduledoc """
-  Orchestrates the release pipeline by running steps in sequence.
+  Executes a pipeline of steps in sequence.
 
   The runner:
   1. Collects all option definitions from steps
   2. Validates provided options against registered options
   3. Applies defaults for missing options
-  4. Runs the check phase on all steps
-  5. Runs the run phase on all steps
+  4. Executes each step's `execute/1` callback
   """
 
   # Core options that are always available (set by the release task, not steps)
@@ -18,15 +17,13 @@ defmodule EasyPublish.Runner do
   }
 
   @doc """
-  Runs the release pipeline with the given steps and options.
+  Runs a pipeline of steps with the given options.
 
   Returns `{:ok, final_context}` on success, `{:error, reason}` on failure.
   """
   def run(steps, opts) do
-    with {:ok, ctx} <- build_context(steps, opts),
-         {:ok, ctx} <- run_phase(:check, steps, ctx),
-         {:ok, ctx} <- run_phase(:run, steps, ctx) do
-      {:ok, ctx}
+    with {:ok, ctx} <- build_context(steps, opts) do
+      execute_steps(steps, ctx)
     end
   end
 
@@ -88,26 +85,20 @@ defmodule EasyPublish.Runner do
     Map.new(all_options)
   end
 
-  defp run_phase(phase, steps, context) do
+  defp execute_steps(steps, context) do
     Enum.reduce_while(steps, {:ok, context}, fn step, {:ok, ctx} ->
-      Code.ensure_loaded!(step)
+      step_name = get_step_name(step)
+      print_step_start(step_name, ctx)
 
-      if function_exported?(step, phase, 1) do
-        step_name = get_step_name(step)
-        print_step_start(phase, step_name, ctx)
+      result = step.execute(ctx)
+      print_step_result(result)
 
-        result = apply(step, phase, [ctx])
-        print_step_result(phase, step_name, result)
-
-        case result do
-          :ok -> {:cont, {:ok, ctx}}
-          {:ok, new_ctx} -> {:cont, {:ok, new_ctx}}
-          :skip -> {:cont, {:ok, ctx}}
-          {:skip, _reason} -> {:cont, {:ok, ctx}}
-          {:error, _} = err -> {:halt, err}
-        end
-      else
-        {:cont, {:ok, ctx}}
+      case result do
+        :ok -> {:cont, {:ok, ctx}}
+        {:ok, new_ctx} -> {:cont, {:ok, new_ctx}}
+        :skip -> {:cont, {:ok, ctx}}
+        {:skip, _reason} -> {:cont, {:ok, ctx}}
+        {:error, _} = err -> {:halt, err}
       end
     end)
   end
@@ -125,12 +116,7 @@ defmodule EasyPublish.Runner do
     end
   end
 
-  defp print_step_start(:check, _name, _ctx) do
-    # Check results are printed with the result
-    :ok
-  end
-
-  defp print_step_start(:run, name, ctx) do
+  defp print_step_start(name, ctx) do
     if ctx[:dry_run] do
       Mix.shell().info([:cyan, "→ ", :reset, name, " (dry run)..."])
     else
@@ -138,21 +124,7 @@ defmodule EasyPublish.Runner do
     end
   end
 
-  defp print_step_result(:check, name, result) do
-    {symbol, color, detail} =
-      case result do
-        :ok -> {"✓", :green, nil}
-        {:ok, _} -> {"✓", :green, nil}
-        :skip -> {"○", :yellow, "skipped"}
-        {:skip, reason} -> {"○", :yellow, reason}
-        {:error, reason} -> {"✗", :red, reason}
-      end
-
-    suffix = if detail, do: " (#{detail})", else: ""
-    Mix.shell().info([color, symbol, " ", :reset, name, suffix])
-  end
-
-  defp print_step_result(:run, _name, result) do
+  defp print_step_result(result) do
     case result do
       :ok -> Mix.shell().info([:green, "  ✓ Done"])
       {:ok, _} -> Mix.shell().info([:green, "  ✓ Done"])

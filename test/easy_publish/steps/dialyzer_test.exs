@@ -17,7 +17,7 @@ defmodule EasyPublish.Steps.DialyzerTest do
     test "returns :skip when skip_dialyzer is true" do
       ctx = %{skip_dialyzer: true}
 
-      assert Dialyzer.check(ctx) == :skip
+      assert Dialyzer.execute(ctx) == :skip
     end
 
     test "returns {:skip, reason} when dialyxir is not installed" do
@@ -31,7 +31,7 @@ defmodule EasyPublish.Steps.DialyzerTest do
 
       if not has_dialyxir? do
         ctx = %{skip_dialyzer: false, dry_run: false}
-        assert Dialyzer.check(ctx) == {:skip, "not installed"}
+        assert Dialyzer.execute(ctx) == {:skip, "not installed"}
       end
     end
 
@@ -48,7 +48,7 @@ defmodule EasyPublish.Steps.DialyzerTest do
         Mix.shell(Mix.Shell.Process)
 
         ctx = %{skip_dialyzer: false, dry_run: true}
-        result = Dialyzer.check(ctx)
+        result = Dialyzer.execute(ctx)
 
         assert result == :ok
         assert_receive {:mix_shell, :info, [msg]}

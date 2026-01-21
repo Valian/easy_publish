@@ -14,7 +14,7 @@ defmodule EasyPublish.Steps.GitPushTest do
       Mix.shell(Mix.Shell.Process)
 
       ctx = %{dry_run: true, version_new: "1.2.3"}
-      result = GitPush.run(ctx)
+      result = GitPush.execute(ctx)
 
       assert result == :ok
       assert_receive {:mix_shell, :info, [msg]}
@@ -28,7 +28,7 @@ defmodule EasyPublish.Steps.GitPushTest do
       Mix.shell(Mix.Shell.Process)
 
       ctx = %{dry_run: true, version_new: "0.5.0"}
-      result = GitPush.run(ctx)
+      result = GitPush.execute(ctx)
 
       assert result == :ok
       assert_receive {:mix_shell, :info, [msg]}

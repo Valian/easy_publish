@@ -8,7 +8,7 @@ defmodule EasyPublish.Steps.UpdateVersion do
   use EasyPublish.Step, name: "Updating version files"
 
   @impl true
-  def run(ctx) do
+  def execute(ctx) do
     current = ctx.version_current
     new = ctx.version_new
 

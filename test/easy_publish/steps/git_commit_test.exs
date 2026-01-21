@@ -18,7 +18,7 @@ defmodule EasyPublish.Steps.GitCommitTest do
       Mix.shell(Mix.Shell.Process)
 
       ctx = %{dry_run: true, version_new: "1.2.3", changelog_file: "CHANGELOG.md"}
-      result = GitCommit.run(ctx)
+      result = GitCommit.execute(ctx)
 
       assert result == :ok
       assert_receive {:mix_shell, :info, [msg1]}
@@ -33,7 +33,7 @@ defmodule EasyPublish.Steps.GitCommitTest do
       Mix.shell(Mix.Shell.Process)
 
       ctx = %{dry_run: true, version_new: "2.0.0", changelog_file: "HISTORY.md"}
-      result = GitCommit.run(ctx)
+      result = GitCommit.execute(ctx)
 
       assert result == :ok
       assert_receive {:mix_shell, :info, [msg]}

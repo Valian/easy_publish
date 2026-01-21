@@ -14,7 +14,7 @@ defmodule EasyPublish.Steps.GitBranch do
   end
 
   @impl true
-  def check(ctx) do
+  def execute(ctx) do
     if ctx.skip_git do
       :skip
     else

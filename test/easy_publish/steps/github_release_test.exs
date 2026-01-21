@@ -17,13 +17,13 @@ defmodule EasyPublish.Steps.GitHubReleaseTest do
     test "returns :skip when skip_github_release is true" do
       ctx = %{skip_github_release: true, version_new: "1.0.0", dry_run: false}
 
-      assert GitHubRelease.run(ctx) == :skip
+      assert GitHubRelease.execute(ctx) == :skip
     end
 
     test "handles various environment states" do
       ctx = %{skip_github_release: false, version_new: "1.0.0", dry_run: false}
 
-      result = GitHubRelease.run(ctx)
+      result = GitHubRelease.execute(ctx)
 
       # Expected outcomes depend on environment:
       # - {:skip, "gh CLI not installed"} if gh not available
@@ -42,7 +42,7 @@ defmodule EasyPublish.Steps.GitHubReleaseTest do
           dry_run: true
         }
 
-        result = GitHubRelease.run(ctx)
+        result = GitHubRelease.execute(ctx)
 
         case result do
           :ok ->

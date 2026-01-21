@@ -17,14 +17,14 @@ defmodule EasyPublish.Steps.GitUpToDateTest do
     test "returns :skip when skip_git is true" do
       ctx = %{skip_git: true}
 
-      assert GitUpToDate.check(ctx) == :skip
+      assert GitUpToDate.execute(ctx) == :skip
     end
 
     test "checks git status against remote" do
       ctx = %{skip_git: false}
 
       # This tests against real git state
-      result = GitUpToDate.check(ctx)
+      result = GitUpToDate.execute(ctx)
 
       # The result depends on actual git state:
       # - :ok if up to date

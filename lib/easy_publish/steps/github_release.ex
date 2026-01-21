@@ -11,7 +11,7 @@ defmodule EasyPublish.Steps.GitHubRelease do
   end
 
   @impl true
-  def run(ctx) do
+  def execute(ctx) do
     version = ctx.version_new
     tag = "v#{version}"
 

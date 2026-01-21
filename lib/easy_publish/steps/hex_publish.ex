@@ -9,7 +9,7 @@ defmodule EasyPublish.Steps.HexPublish do
   use EasyPublish.Step, name: "Publishing to Hex"
 
   @impl true
-  def run(ctx) do
+  def execute(ctx) do
     if ctx.dry_run do
       info("Would run: mix hex.publish --yes")
       :ok

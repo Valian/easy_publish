@@ -11,7 +11,7 @@ defmodule EasyPublish.Steps.Tests do
   end
 
   @impl true
-  def check(ctx) do
+  def execute(ctx) do
     cond do
       ctx.skip_tests ->
         :skip

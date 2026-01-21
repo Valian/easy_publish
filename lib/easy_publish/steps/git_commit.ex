@@ -11,7 +11,7 @@ defmodule EasyPublish.Steps.GitCommit do
   end
 
   @impl true
-  def run(ctx) do
+  def execute(ctx) do
     version = ctx.version_new
     files = ["mix.exs", "README.md", ctx.changelog_file]
 

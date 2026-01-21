@@ -74,20 +74,23 @@ defmodule Mix.Tasks.EasyPublish.Release do
 
   ## Custom Steps
 
-  You can customize the release pipeline by configuring steps:
+  You can customize the release pipelines by configuring steps:
 
       # Replace all steps
       config :easy_publish,
-        steps: [
-          EasyPublish.Steps.Tests,
-          MyApp.CustomStep,
+        check_steps: [
+          EasyPublish.Steps.GitClean,
+          EasyPublish.Steps.Tests
+        ],
+        release_steps: [
+          EasyPublish.Steps.UpdateVersion,
           EasyPublish.Steps.HexPublish
         ]
 
       # Or modify defaults
       config :easy_publish,
-        prepend_steps: [MyApp.BeforeRelease],
-        append_steps: [MyApp.NotifySlack],
+        prepend_check_steps: [MyApp.BeforeChecks],
+        append_release_steps: [MyApp.NotifySlack],
         skip_steps: [EasyPublish.Steps.Dialyzer]
 
   ## CI/Automation
@@ -175,7 +178,8 @@ defmodule Mix.Tasks.EasyPublish.Release do
   defp do_release(cli_opts, current_version, new_version) do
     print_header(current_version, new_version)
 
-    steps = EasyPublish.Steps.resolve_steps()
+    check_steps = EasyPublish.Steps.resolve_check_steps()
+    release_steps = EasyPublish.Steps.resolve_release_steps()
 
     # Merge CLI opts with app config, add version info
     opts =
@@ -190,23 +194,34 @@ defmodule Mix.Tasks.EasyPublish.Release do
       Mix.shell().info("")
     end
 
-    Mix.shell().info([:cyan, "Running Steps"])
+    Mix.shell().info([:cyan, "Running Checks"])
     Mix.shell().info("")
 
-    case EasyPublish.Runner.run(steps, opts) do
-      {:ok, _ctx} ->
-        Mix.shell().info("")
+    with {:ok, ctx} <- EasyPublish.Runner.run(check_steps, opts) do
+      Mix.shell().info("")
+      Mix.shell().info([:cyan, "Running Release"])
+      Mix.shell().info("")
 
-        if opts[:dry_run] do
-          Mix.shell().info([:green, "Dry run complete!"])
-          Mix.shell().info("Run without --dry-run to perform the release.")
-        else
-          Mix.shell().info([:green, "Successfully released v#{new_version}!"])
-        end
+      case EasyPublish.Runner.run(release_steps, Keyword.new(ctx)) do
+        {:ok, _ctx} ->
+          Mix.shell().info("")
 
+          if opts[:dry_run] do
+            Mix.shell().info([:green, "Dry run complete!"])
+            Mix.shell().info("Run without --dry-run to perform the release.")
+          else
+            Mix.shell().info([:green, "Successfully released v#{new_version}!"])
+          end
+
+        {:error, reason} ->
+          Mix.shell().info("")
+          Mix.shell().error("Release failed: #{reason}")
+          exit({:shutdown, 1})
+      end
+    else
       {:error, reason} ->
         Mix.shell().info("")
-        Mix.shell().error("Release failed: #{reason}")
+        Mix.shell().error("Checks failed: #{reason}")
         exit({:shutdown, 1})
     end
   end

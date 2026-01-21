@@ -1,6 +1,6 @@
 defmodule EasyPublish.Step do
   @moduledoc """
-  Behaviour for release steps. Each step can check and/or run.
+  Behaviour for release steps.
 
   ## Usage
 
@@ -13,13 +13,7 @@ defmodule EasyPublish.Step do
         end
 
         @impl true
-        def check(ctx) do
-          # Validate preconditions
-          :ok
-        end
-
-        @impl true
-        def run(ctx) do
+        def execute(ctx) do
           if ctx.dry_run do
             info("Would do something")
             :ok
@@ -32,11 +26,8 @@ defmodule EasyPublish.Step do
 
   ## Callbacks
 
-  All callbacks are optional. Implement what you need:
-
-  - `options/0` - Declare options this step uses (for validation and defaults)
-  - `check/1` - Validate preconditions before any changes are made
-  - `run/1` - Execute the step's action
+  - `options/0` - (optional) Declare options this step uses
+  - `execute/1` - Execute the step
 
   ## Return Values
 
@@ -53,10 +44,9 @@ defmodule EasyPublish.Step do
   @type option_def :: {atom(), keyword()}
 
   @callback options() :: [option_def()]
-  @callback check(context()) :: result()
-  @callback run(context()) :: result()
+  @callback execute(context()) :: result()
 
-  @optional_callbacks options: 0, check: 1, run: 1
+  @optional_callbacks options: 0
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do

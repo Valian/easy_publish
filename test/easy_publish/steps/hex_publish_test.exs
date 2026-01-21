@@ -15,7 +15,7 @@ defmodule EasyPublish.Steps.HexPublishTest do
 
       try do
         ctx = %{dry_run: true}
-        result = HexPublish.run(ctx)
+        result = HexPublish.execute(ctx)
 
         assert result == :ok
         assert_receive {:mix_shell, :info, [msg]}

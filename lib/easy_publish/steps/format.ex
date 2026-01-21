@@ -11,7 +11,7 @@ defmodule EasyPublish.Steps.Format do
   end
 
   @impl true
-  def check(ctx) do
+  def execute(ctx) do
     cond do
       ctx.skip_format ->
         :skip

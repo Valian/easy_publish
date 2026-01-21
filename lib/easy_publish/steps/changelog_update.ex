@@ -1,55 +1,24 @@
-defmodule EasyPublish.Steps.Changelog do
+defmodule EasyPublish.Steps.ChangelogUpdate do
   @moduledoc """
-  Handles changelog validation and updates.
+  Updates the changelog for release.
 
-  In the check phase:
-  - Verifies the changelog has an UNRELEASED section (unless `changelog_entry` is provided)
-
-  In the run phase:
   - Adds a changelog entry if provided via `changelog_entry` option
   - Replaces UNRELEASED with the version and date
   """
 
-  use EasyPublish.Step, name: "Changelog"
+  use EasyPublish.Step, name: "Updating changelog"
 
   @impl true
   def options do
     [
-      {:skip_changelog, type: :boolean, default: false, doc: "Skip changelog check"},
+      {:skip_changelog, type: :boolean, default: false, doc: "Skip changelog update"},
       {:changelog_file, type: :string, default: "CHANGELOG.md", doc: "Path to changelog file"},
       {:changelog_entry, type: :string, default: nil, doc: "Changelog entry to add automatically"}
     ]
   end
 
   @impl true
-  def check(ctx) do
-    cond do
-      ctx.skip_changelog ->
-        :skip
-
-      ctx.changelog_entry != nil ->
-        {:skip, "entry will be added automatically"}
-
-      true ->
-        case File.read(ctx.changelog_file) do
-          {:ok, content} ->
-            if has_unreleased?(content) do
-              :ok
-            else
-              {:error, "no UNRELEASED section found"}
-            end
-
-          {:error, :enoent} ->
-            {:error, "#{ctx.changelog_file} not found"}
-
-          {:error, reason} ->
-            {:error, inspect(reason)}
-        end
-    end
-  end
-
-  @impl true
-  def run(ctx) do
+  def execute(ctx) do
     if ctx.skip_changelog do
       :skip
     else

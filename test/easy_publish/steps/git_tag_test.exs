@@ -8,7 +8,7 @@ defmodule EasyPublish.Steps.GitTagTest do
       Mix.shell(Mix.Shell.Process)
 
       ctx = %{dry_run: true, version_new: "1.0.0"}
-      result = GitTag.run(ctx)
+      result = GitTag.execute(ctx)
 
       assert result == :ok
       assert_receive {:mix_shell, :info, [msg]}
@@ -21,7 +21,7 @@ defmodule EasyPublish.Steps.GitTagTest do
       Mix.shell(Mix.Shell.Process)
 
       ctx = %{dry_run: true, version_new: "2.5.3"}
-      result = GitTag.run(ctx)
+      result = GitTag.execute(ctx)
 
       assert result == :ok
       assert_receive {:mix_shell, :info, [msg]}

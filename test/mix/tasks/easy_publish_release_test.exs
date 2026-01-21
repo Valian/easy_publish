@@ -27,7 +27,7 @@ defmodule Mix.Tasks.EasyPublish.ReleaseTest do
       output = run_and_capture(["patch", "--dry-run", "--skip-tests", "--skip-dialyzer"])
 
       assert output =~ "DRY RUN"
-      assert output =~ "Running Steps"
+      assert output =~ "Running Checks"
     end
 
     test "accepts major/minor/patch keywords" do
@@ -85,7 +85,7 @@ defmodule Mix.Tasks.EasyPublish.ReleaseTest do
         ])
 
       # Branch check is skipped but option is accepted without error
-      assert output =~ "Running Steps"
+      assert output =~ "Running Checks"
     end
   end
 

@@ -25,7 +25,7 @@ defmodule EasyPublish.Steps.GitBranchTest do
     test "returns :skip when skip_git is true" do
       ctx = %{skip_git: true, branch: "main"}
 
-      assert GitBranch.check(ctx) == :skip
+      assert GitBranch.execute(ctx) == :skip
     end
 
     test "returns :ok when on the expected branch" do
@@ -34,7 +34,7 @@ defmodule EasyPublish.Steps.GitBranchTest do
 
       ctx = %{skip_git: false, branch: current_branch}
 
-      assert GitBranch.check(ctx) == :ok
+      assert GitBranch.execute(ctx) == :ok
     end
 
     test "returns error when on wrong branch" do
@@ -44,7 +44,7 @@ defmodule EasyPublish.Steps.GitBranchTest do
       wrong_branch = "definitely-not-#{current_branch}-branch"
       ctx = %{skip_git: false, branch: wrong_branch}
 
-      result = GitBranch.check(ctx)
+      result = GitBranch.execute(ctx)
 
       assert {:error, msg} = result
       assert msg == "on '#{current_branch}', expected '#{wrong_branch}'"

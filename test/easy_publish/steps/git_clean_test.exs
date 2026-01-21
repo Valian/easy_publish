@@ -17,7 +17,7 @@ defmodule EasyPublish.Steps.GitCleanTest do
     test "returns :skip when skip_git is true" do
       ctx = %{skip_git: true}
 
-      assert GitClean.check(ctx) == :skip
+      assert GitClean.execute(ctx) == :skip
     end
 
     test "returns :ok when working directory is clean" do
@@ -25,7 +25,7 @@ defmodule EasyPublish.Steps.GitCleanTest do
 
       # The test repo should be clean after commits
       # This tests against real git state
-      result = GitClean.check(ctx)
+      result = GitClean.execute(ctx)
 
       # If we're in a clean state, expect :ok
       # If there happen to be uncommitted changes, that's also valid behavior
@@ -40,7 +40,7 @@ defmodule EasyPublish.Steps.GitCleanTest do
         File.write!(test_file, "test content")
 
         ctx = %{skip_git: false}
-        result = GitClean.check(ctx)
+        result = GitClean.execute(ctx)
 
         assert {:error, msg} = result
         assert msg =~ "uncommitted changes"

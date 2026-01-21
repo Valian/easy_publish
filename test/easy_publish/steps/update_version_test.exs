@@ -11,7 +11,7 @@ defmodule EasyPublish.Steps.UpdateVersionTest do
         version_new: "1.0.0"
       }
 
-      assert {:skip, "releasing current version"} = UpdateVersion.run(ctx)
+      assert {:skip, "releasing current version"} = UpdateVersion.execute(ctx)
     end
 
     test "logs what would be updated in dry_run mode" do
@@ -23,7 +23,7 @@ defmodule EasyPublish.Steps.UpdateVersionTest do
         version_new: "1.0.1"
       }
 
-      result = UpdateVersion.run(ctx)
+      result = UpdateVersion.execute(ctx)
 
       assert result == :ok
       assert_receive {:mix_shell, :info, [msg1]}
@@ -43,7 +43,7 @@ defmodule EasyPublish.Steps.UpdateVersionTest do
         version_new: "2.0.0"
       }
 
-      result = UpdateVersion.run(ctx)
+      result = UpdateVersion.execute(ctx)
 
       assert result == :ok
       assert_receive {:mix_shell, :info, [msg1]}
