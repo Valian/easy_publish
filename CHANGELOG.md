@@ -1,5 +1,12 @@
 # Changelog
 
+## UNRELEASED
+
+- Refactor into step-based architecture with two pipelines (check + release) (#5)
+- Add `EasyPublish.Step` behaviour for custom steps with `execute/1` callback (#5)
+- Add `EasyPublish.Runner` for sequential step execution with option validation (#5)
+- Support custom step configuration: `check_steps`, `release_steps`, `prepend_*`, `append_*`, `skip_steps` (#5)
+
 ## 0.1.2 - 2026-01-07
 
 - Fix stdin not being passed to hex.publish password prompt
