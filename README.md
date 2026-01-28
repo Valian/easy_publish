@@ -43,12 +43,12 @@ mix easy_publish.release patch --dry-run
 
 ## Release Flow
 
-EasyPublish uses a step-based architecture. Steps run in two phases:
+EasyPublish uses a step-based architecture with two pipelines:
 
-1. **Check phase** - All steps run their `check/1` callback to validate preconditions
-2. **Run phase** - All steps run their `run/1` callback to execute actions
+1. **Check pipeline** - Validates preconditions before any changes are made
+2. **Release pipeline** - Performs the actual release (version bump, commit, tag, publish)
 
-If any step fails in either phase, the pipeline halts.
+Each step implements an `execute/1` callback. If any step fails, the pipeline halts.
 
 ### Default Steps
 
@@ -88,7 +88,7 @@ defmodule MyApp.Steps.NotifySlack do
   end
 
   @impl true
-  def run(ctx) do
+  def execute(ctx) do
     if ctx.dry_run do
       info("Would notify Slack")
       :ok
@@ -112,19 +112,22 @@ end
 ```elixir
 # config/config.exs
 
-# Replace all default steps
+# Replace all default steps entirely
 config :easy_publish,
-  steps: [
+  check_steps: [
     EasyPublish.Steps.GitClean,
-    EasyPublish.Steps.Tests,
+    EasyPublish.Steps.Tests
+  ],
+  release_steps: [
+    EasyPublish.Steps.UpdateVersion,
     MyApp.Steps.CustomStep,
     EasyPublish.Steps.HexPublish
   ]
 
 # Or modify defaults
 config :easy_publish,
-  prepend_steps: [MyApp.Steps.BeforeRelease],
-  append_steps: [MyApp.Steps.NotifySlack],
+  prepend_check_steps: [MyApp.Steps.BeforeChecks],
+  append_release_steps: [MyApp.Steps.NotifySlack],
   skip_steps: [EasyPublish.Steps.Dialyzer]
 ```
 

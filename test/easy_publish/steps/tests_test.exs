@@ -13,7 +13,7 @@ defmodule EasyPublish.Steps.TestsTest do
     end
   end
 
-  describe "check/1" do
+  describe "execute/1" do
     test "returns :skip when skip_tests is true" do
       ctx = %{skip_tests: true}
 
