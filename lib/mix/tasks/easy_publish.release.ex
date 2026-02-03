@@ -181,6 +181,10 @@ defmodule Mix.Tasks.EasyPublish.Release do
     check_steps = EasyPublish.Steps.resolve_check_steps()
     release_steps = EasyPublish.Steps.resolve_release_steps()
 
+    # Collect options from both pipelines so typos are caught regardless of which pipeline runs
+    check_options = EasyPublish.Runner.collect_options(check_steps)
+    release_options = EasyPublish.Runner.collect_options(release_steps)
+
     # Merge CLI opts with app config, add version info
     opts =
       cli_opts
@@ -197,12 +201,15 @@ defmodule Mix.Tasks.EasyPublish.Release do
     Mix.shell().info([:cyan, "Running Checks"])
     Mix.shell().info("")
 
-    with {:ok, ctx} <- EasyPublish.Runner.run(check_steps, opts) do
+    with {:ok, ctx} <-
+           EasyPublish.Runner.run(check_steps, opts, extra_known_options: release_options) do
       Mix.shell().info("")
       Mix.shell().info([:cyan, "Running Release"])
       Mix.shell().info("")
 
-      case EasyPublish.Runner.run(release_steps, Keyword.new(ctx)) do
+      case EasyPublish.Runner.run(release_steps, Keyword.new(ctx),
+             extra_known_options: check_options
+           ) do
         {:ok, _ctx} ->
           Mix.shell().info("")
 
