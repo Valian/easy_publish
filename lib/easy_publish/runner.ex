@@ -17,20 +17,41 @@ defmodule EasyPublish.Runner do
   }
 
   @doc """
+  Collects all option definitions declared by the given steps.
+  """
+  def collect_options(steps) do
+    steps
+    |> Enum.flat_map(fn step ->
+      Code.ensure_loaded!(step)
+      if function_exported?(step, :options, 0), do: step.options(), else: []
+    end)
+    |> Map.new()
+  end
+
+  @doc """
   Runs a pipeline of steps with the given options.
 
   Returns `{:ok, final_context}` on success, `{:error, reason}` on failure.
+
+  ## Options
+
+    * `:extra_known_options` - Additional option definitions to accept during
+      validation (e.g. from another pipeline), as a map of `%{key => meta}`.
   """
-  def run(steps, opts) do
-    with {:ok, ctx} <- build_context(steps, opts) do
+  def run(steps, opts, run_opts \\ []) do
+    with {:ok, ctx} <- build_context(steps, opts, run_opts) do
       execute_steps(steps, ctx)
     end
   end
 
-  defp build_context(steps, opts) do
+  defp build_context(steps, opts, run_opts) do
     step_options = collect_options(steps)
     all_options = Map.merge(@core_options, step_options)
-    registered_keys = Map.keys(all_options)
+
+    # For validation, also accept options from other pipelines (e.g. check + release)
+    extra_options = Keyword.get(run_opts, :extra_known_options, %{})
+    validation_options = Map.merge(all_options, extra_options)
+    registered_keys = Map.keys(validation_options)
 
     provided_keys = Keyword.keys(opts)
     unknown = provided_keys -- registered_keys
@@ -60,29 +81,6 @@ defmodule EasyPublish.Runner do
           {:ok, ctx}
         end
     end
-  end
-
-  defp collect_options(steps) do
-    all_options =
-      steps
-      |> Enum.flat_map(fn step ->
-        Code.ensure_loaded!(step)
-        if function_exported?(step, :options, 0), do: step.options(), else: []
-      end)
-
-    # Warn about duplicate options
-    all_options
-    |> Enum.map(fn {key, _} -> key end)
-    |> Enum.frequencies()
-    |> Enum.filter(fn {_, count} -> count > 1 end)
-    |> Enum.each(fn {key, count} ->
-      Mix.shell().info([
-        :yellow,
-        "Warning: option :#{key} is declared by #{count} steps"
-      ])
-    end)
-
-    Map.new(all_options)
   end
 
   defp execute_steps(steps, context) do
