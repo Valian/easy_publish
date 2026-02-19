@@ -1,6 +1,6 @@
 # Changelog
 
-## UNRELEASED
+## 0.2.1 - 2026-02-19
 
 - Fix `hex.publish` publishing the old version after a version bump. The Mix project module had the previous `@version` cached in memory; it is now reloaded from disk after updating `mix.exs`.
 
