@@ -68,7 +68,6 @@ defmodule EasyPublish.Runner do
           |> Enum.map(fn {key, meta} -> {key, Keyword.get(meta, :default)} end)
           |> Keyword.merge(opts)
           |> Map.new()
-          |> Map.put(:registered_options, all_options)
 
         missing =
           all_options
