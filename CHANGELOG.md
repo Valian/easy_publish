@@ -2,10 +2,15 @@
 
 ## UNRELEASED
 
-- Refactor into step-based architecture with two pipelines (check + release) (#5)
-- Add `EasyPublish.Step` behaviour for custom steps with `execute/1` callback (#5)
-- Add `EasyPublish.Runner` for sequential step execution with option validation (#5)
-- Support custom step configuration: `check_steps`, `release_steps`, `prepend_*`, `append_*`, `skip_steps` (#5)
+### Breaking changes
+
+- The monolithic release task has been split into individual step modules. If you were relying on internal functions of `Mix.Tasks.EasyPublish.Release`, they have moved. The `mix easy_publish.release` CLI interface is unchanged. (#5)
+
+### New features
+
+- **Customizable release pipeline** — each check and release action is now a separate step module. You can replace, prepend, append, or skip steps via config. For example, skip dialyzer with `skip_steps: [EasyPublish.Steps.Dialyzer]` or add a Slack notification with `append_release_steps: [MyApp.NotifySlack]`. (#5)
+- **Custom step behaviour** — implement `EasyPublish.Step` to write your own steps with `use EasyPublish.Step, name: "My step"` and an `execute/1` callback. Steps can declare their own options and return `:ok`, `:skip`, or `{:error, reason}`. (#5)
+- **Option validation** — misspelled options are now caught before the release starts, with "did you mean?" suggestions. Validation covers options from both the check and release pipelines. (#6)
 
 ## 0.1.2 - 2026-01-07
 
