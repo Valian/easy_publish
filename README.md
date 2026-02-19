@@ -9,7 +9,7 @@ Add `easy_publish` to your list of dependencies in `mix.exs` as a dev-only depen
 ```elixir
 def deps do
   [
-    {:easy_publish, "~> 0.1", only: :dev, runtime: false}
+    {:easy_publish, "~> 0.2", only: :dev, runtime: false}
   ]
 end
 ```
