@@ -54,6 +54,22 @@ defmodule EasyPublish.Step.Helpers do
   end
 
   @doc """
+  Reloads the Mix project module from disk.
+
+  After updating `mix.exs`, the in-memory module still has the old `@version`
+  baked in. This purges the old module and recompiles `mix.exs` so that
+  subsequent calls to `Mix.Project.config()` return the new version.
+  """
+  def reload_mix_project do
+    module = Mix.Project.get!()
+    Mix.Project.pop()
+    :code.purge(module)
+    :code.delete(module)
+    Code.compile_file("mix.exs")
+    :ok
+  end
+
+  @doc """
   Outputs an info message to the shell.
   """
   def info(msg), do: Mix.shell().info(msg)

@@ -22,6 +22,7 @@ defmodule EasyPublish.Steps.UpdateVersion do
       else
         with :ok <- update_mix_exs(new, current),
              :ok <- update_readme(new, current) do
+          reload_mix_project()
           :ok
         end
       end
