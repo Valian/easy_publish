@@ -1,5 +1,11 @@
 # Changelog
 
+## UNRELEASED
+
+- Fix tests running with wrong `MIX_ENV` when the host project uses env-dependent config (e.g. `consolidate_protocols: Mix.env() != :test`). Tests now run as a subprocess with `MIX_ENV=test`.
+- Fix release proceeding even when tests fail. `ExUnit` defers its exit to `System.at_exit`, so the in-process runner never saw the failure.
+- `--dry-run` now runs all checks for real instead of faking them. Only release steps are skipped.
+
 ## 0.2.1 - 2026-02-19
 
 - Fix `hex.publish` publishing the old version after a version bump. The Mix project module had the previous `@version` cached in memory; it is now reloaded from disk after updating `mix.exs`.
