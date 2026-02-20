@@ -19,10 +19,6 @@ defmodule EasyPublish.Steps.Dialyzer do
       not has_dep?(:dialyxir) ->
         {:skip, "not installed"}
 
-      ctx.dry_run ->
-        info("Would run: mix dialyzer")
-        :ok
-
       true ->
         case run_mix_task("dialyzer") do
           :ok -> :ok

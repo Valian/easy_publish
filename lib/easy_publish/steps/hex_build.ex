@@ -12,19 +12,13 @@ defmodule EasyPublish.Steps.HexBuild do
 
   @impl true
   def execute(ctx) do
-    cond do
-      ctx.skip_hex_build ->
-        :skip
-
-      ctx.dry_run ->
-        info("Would run: mix hex.build")
-        :ok
-
-      true ->
-        case run_mix_task("hex.build") do
-          :ok -> :ok
-          {:error, _} -> {:error, "hex.build failed"}
-        end
+    if ctx.skip_hex_build do
+      :skip
+    else
+      case run_mix_task("hex.build") do
+        :ok -> :ok
+        {:error, _} -> {:error, "hex.build failed"}
+      end
     end
   end
 end

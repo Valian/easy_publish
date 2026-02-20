@@ -12,26 +12,13 @@ defmodule EasyPublish.Steps.Tests do
 
   @impl true
   def execute(ctx) do
-    cond do
-      ctx.skip_tests ->
-        :skip
-
-      ctx.dry_run ->
-        info("Would run: mix test")
-        :ok
-
-      true ->
-        original_env = Mix.env()
-        Mix.env(:test)
-
-        result = run_mix_task("test")
-
-        Mix.env(original_env)
-
-        case result do
-          :ok -> :ok
-          {:error, _} -> {:error, "tests failed"}
-        end
+    if ctx.skip_tests do
+      :skip
+    else
+      case run_mix_cmd("test", [], env: [{"MIX_ENV", "test"}]) do
+        :ok -> :ok
+        {:error, _} -> {:error, "tests failed"}
+      end
     end
   end
 end

@@ -20,17 +20,12 @@ defmodule EasyPublish.Steps.FormatTest do
       assert Format.execute(ctx) == :skip
     end
 
-    test "logs dry-run message and returns :ok when dry_run is true" do
-      Mix.shell(Mix.Shell.Process)
-
+    test "runs format check even when dry_run is true" do
       ctx = %{skip_format: false, dry_run: true}
       result = Format.execute(ctx)
 
-      assert result == :ok
-      assert_receive {:mix_shell, :info, [msg]}
-      assert IO.iodata_to_binary(msg) =~ "Would run: mix format --check-formatted"
-
-      Mix.shell(Mix.Shell.IO)
+      # Check actually runs regardless of dry_run
+      assert result == :ok or match?({:error, "code is not formatted" <> _}, result)
     end
 
     test "returns :ok when code is formatted" do

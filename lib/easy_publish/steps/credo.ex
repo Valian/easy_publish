@@ -19,10 +19,6 @@ defmodule EasyPublish.Steps.Credo do
       not has_dep?(:credo) ->
         {:skip, "not installed"}
 
-      ctx.dry_run ->
-        info("Would run: mix credo --strict")
-        :ok
-
       true ->
         case run_mix_task("credo", ["--strict"]) do
           :ok -> :ok

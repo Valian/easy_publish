@@ -70,6 +70,28 @@ defmodule EasyPublish.Step.Helpers do
   end
 
   @doc """
+  Runs a mix task as a subprocess.
+
+  Unlike `run_mix_task/2`, this starts a fresh BEAM with its own `MIX_ENV`,
+  so project config is evaluated from scratch. Returns `:ok` on exit code 0,
+  `{:error, reason}` otherwise.
+
+  Output is streamed to stdout in real-time.
+
+  ## Options
+
+    * `:env` - Environment variables as a list of `{key, value}` tuples.
+  """
+  def run_mix_cmd(task, args \\ [], opts \\ []) do
+    env = Keyword.get(opts, :env, [])
+
+    case System.cmd("mix", [task | args], env: env, into: IO.stream(), stderr_to_stdout: true) do
+      {_, 0} -> :ok
+      {_, _} -> {:error, "mix #{task} failed"}
+    end
+  end
+
+  @doc """
   Outputs an info message to the shell.
   """
   def info(msg), do: Mix.shell().info(msg)
