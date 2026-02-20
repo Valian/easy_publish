@@ -1,6 +1,6 @@
 # Changelog
 
-## UNRELEASED
+## 0.2.2 - 2026-02-20
 
 - Fix tests running with wrong `MIX_ENV` when the host project uses env-dependent config (e.g. `consolidate_protocols: Mix.env() != :test`). Tests now run as a subprocess with `MIX_ENV=test`.
 - Fix release proceeding even when tests fail. `ExUnit` defers its exit to `System.at_exit`, so the in-process runner never saw the failure.
